@@ -405,6 +405,8 @@ class UpdaterViewModel: ObservableObject {
     /// the old Sparkle feed used (SUScheduledCheckInterval = 14400s).
     private let checkInterval: TimeInterval = 4 * 60 * 60
     private var checkTimer: Timer?
+    /// Retained so the block-based observer can be removed in `deinit`.
+    private var installObserver: NSObjectProtocol?
     /// The version we last surfaced a prompt for, so the recurring timer doesn't
     /// re-nag every interval for an update the user already saw (and dismissed).
     private var lastPromptedVersion: String?
@@ -424,11 +426,18 @@ class UpdaterViewModel: ObservableObject {
         // The system update notification's Install action (and tap) posts this —
         // re-check the feed and install. Routed through NotificationCenter so it
         // works even after a restart (no captured in-memory handler).
-        NotificationCenter.default.addObserver(
+        installObserver = NotificationCenter.default.addObserver(
             forName: .updateInstallRequested, object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.installLatestIfAvailable() }
         }
+    }
+
+    deinit {
+        if let installObserver {
+            NotificationCenter.default.removeObserver(installObserver)
+        }
+        checkTimer?.invalidate()
     }
 
     func setAutomaticallyChecksForUpdates(_ value: Bool) {
