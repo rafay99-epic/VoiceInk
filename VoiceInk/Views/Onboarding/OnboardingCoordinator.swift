@@ -95,6 +95,12 @@ final class OnboardingCoordinator: ObservableObject {
             return .experience
         }
 
+        // The `.license` stage was removed (the app is always licensed). Migrate
+        // anyone persisted on it to the step that replaced it: the terminal Trust step.
+        if storedStage == "license" {
+            return .trust
+        }
+
         return storedStage == "parakeet" ? .model : .permissions
     }
 
@@ -128,7 +134,7 @@ final class OnboardingCoordinator: ObservableObject {
     }
 
     var totalStepCount: Int {
-        OnboardingStage.baseStepCount + activeExperienceSteps.count + contextAwarenessStepCount + 2
+        OnboardingStage.baseStepCount + activeExperienceSteps.count + contextAwarenessStepCount + 1
     }
 
     var experienceStep: OnboardingExperienceStep {

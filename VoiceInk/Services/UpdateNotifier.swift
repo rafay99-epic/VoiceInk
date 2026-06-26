@@ -58,7 +58,13 @@ final class UpdateNotifier: NSObject, UNUserNotificationCenterDelegate {
             intentIdentifiers: [],
             options: []
         )
-        center.setNotificationCategories([category])
+        // Merge into the existing set (union by identifier) rather than overwriting,
+        // so categories registered elsewhere in the app are preserved.
+        center.getNotificationCategories { existing in
+            var merged = existing.filter { $0.identifier != self.categoryID }
+            merged.insert(category)
+            center.setNotificationCategories(merged)
+        }
     }
 
     // Show the banner even when Quill is the frontmost app.
@@ -77,7 +83,11 @@ final class UpdateNotifier: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        if response.actionIdentifier == installActionID || response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+        // Only react to *this* notifier's update notification, not arbitrary ones,
+        // so an unrelated default-tap can't kick off the install flow.
+        let isUpdateNotification = response.notification.request.content.categoryIdentifier == categoryID
+        if isUpdateNotification,
+           response.actionIdentifier == installActionID || response.actionIdentifier == UNNotificationDefaultActionIdentifier {
             NotificationCenter.default.post(name: .updateInstallRequested, object: nil)
         }
         completionHandler()

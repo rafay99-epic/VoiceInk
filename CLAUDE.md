@@ -113,7 +113,35 @@ account, no team. The project's `CODE_SIGN_IDENTITY`/`STYLE` are set to `-`/`Man
 and `DEVELOPMENT_TEAM` is empty (the upstream dev's team id `V6J6A3VWY2` and the
 `Apple Development` identity were removed). Ad-hoc signing **cannot** be dropped
 entirely — Apple Silicon refuses to launch an unsigned binary — but it requires
-nothing from the developer. Don't re-introduce a real identity/team.
+nothing from the developer. Don't re-introduce a real (Apple) identity/team.
+
+**Stable-signature caveat (the Accessibility-grant trap).** An ad-hoc signature is
+derived from the binary hash, so it changes on **every build**. macOS keys the
+Accessibility/Microphone (TCC) grant to the signature, so each update is seen as a
+"new app" and the dictation hotkey silently stops working until the user re-grants
+Accessibility (the toggle can still read as ON while being dead). To make the grant
+**persist across updates**, builds can be signed with a stable **self-signed**
+code-signing certificate — this needs **no Apple account** and is *not* an Apple
+identity/team (so it doesn't violate the rule above):
+
+- `build.sh` signs ad-hoc by default; export **`QUILL_SIGN_IDENTITY="<cert name>"`**
+  to sign the final bundle with that keychain identity instead. Absent/missing → it
+  falls back to ad-hoc, so a fresh clone still builds.
+- `Scripts/make-signing-cert.sh` generates the cert, imports it to the login keychain,
+  and prints a base64 `.p12` for CI. Run it once locally.
+- **CI** (`ci.yml` package+release, `nightly.yml` release) calls
+  `.github/scripts/setup-signing.sh`, which imports the cert from the
+  **`MACOS_SIGN_CERT_P12`** / **`MACOS_SIGN_CERT_PASSWORD`** secrets into a throwaway
+  keychain and sets `QUILL_SIGN_IDENTITY`. Missing secret → `::warning::` + ad-hoc
+  (same graceful-skip pattern as `TAP_TOKEN`). Because all distribution is via GitHub
+  releases, **the cert must live in CI** (a local-only cert can't sign the DMGs users
+  install) — use the *same* cert locally and in CI so local and released builds share
+  one signature. `make-dmg.sh` only `ditto`s the app, so `build.sh`'s signature is
+  what ships. (Gatekeeper still shows "unidentified developer" on first launch — that
+  is separate from TCC and unchanged.)
+- When the event tap fails to install (the only cause is a missing/stale Accessibility
+  grant), `Shortcuts/ShortcutMonitor.swift` now surfaces a "grant Accessibility"
+  notification instead of failing silently.
 
 Local build — no Apple Developer account needed (ad-hoc signing via
 `LocalBuild.xcconfig`, which also sets the `LOCAL_BUILD` flag, though the license
@@ -132,11 +160,13 @@ bundle id + version + channel + channel-tinted icon:
 
 ```sh
 ./build.sh                                   # stable, version 0.<commit count> → build/Quill.app
-QUILL_CHANNEL=nightly QUILL_BUILD=42 ./build.sh
-./make-dmg.sh                                # package build/<App>.app → build/Quill[-Nightly].dmg
-./dev.sh                                     # build Dev channel → /Applications/Quill Dev.app
-./nightly.sh                                 # build Nightly channel locally → /Applications/Quill Nightly.app
+./make-dmg.sh                                # package build/Quill.app → build/Quill.dmg
+./dev.sh                                     # build Dev channel → /Applications/Quill Dev.app (local testing)
 ```
+
+(The Nightly channel was retired — `nightly.sh` and the `nightly`/`promotion`
+workflows are gone. `build.sh`/`Channel.swift` still *accept* `QUILL_CHANNEL=nightly`
+as dead-but-harmless code; don't use it.)
 
 After a build, drag `Quill.app` to `/Applications`, then grant **Microphone** +
 **Accessibility** and download a Whisper model from Settings → AI Models
@@ -170,31 +200,37 @@ pull the upstream developer's signed builds (which would clobber the patch).
   (menus + Settings) with plain NSAlerts. The Settings "Auto-check Updates" toggle
   persists to `QuillAutoCheckUpdates` (**off by default**); when on, it checks at
   launch **and on a recurring 4h `Timer`** (`checkInterval`), guarded by
-  `lastPromptedVersion` so it never re-nags for a version already dismissed. **No Sparkle, no appcast.xml, no EdDSA
+  `lastPromptedVersion` so it won't re-nag for a version already dismissed **within
+  the same app session** (`lastPromptedVersion` is in-memory, not persisted, so a
+  relaunch can prompt again for that version). **No Sparkle, no appcast.xml, no EdDSA
   keys.** The `SU*` Info.plist keys and the upstream `announcementsURL` were removed/
   repointed off `beingpax.github.io`.
 - If you re-sync upstream, do not re-add Sparkle or restore `SUFeedURL`.
 
-### CI / release cycle (`.github/workflows/`, mirrors Crisp/Porter)
+### CI / release cycle (`.github/workflows/`)
 
-- `ci.yml` — `lint` (SwiftLint) gates. On a PR, `package` builds the DMG as an
-  artifact. On push to `main`, `release` computes `VERSION=0.<commit count>`, builds
-  via `./build.sh && ./make-dmg.sh`, and `gh release create v$VERSION build/Quill.dmg`.
-- `nightly.yml` — push to `nightly` builds the Nightly channel and refreshes the
-  single rolling `nightly` pre-release (title carries `build <run_number>`).
+Only **`ci.yml`** remains — the old `nightly.yml` and `promotion.yml` (the Nightly
+channel + weekly auto-promotion) were **removed**; the model is now just **dev →
+stable** (see Branch model below).
+
+- `ci.yml` — `lint` (SwiftLint) gates. On a **PR**, `package` builds the DMG as an
+  artifact (**ad-hoc** signed — deliberately no signing step there, so a PR branch
+  never receives the signing secrets). On push to `main`, `release` computes
+  `VERSION=0.<commit count>`, imports the stable cert via
+  `.github/scripts/setup-signing.sh`, builds via `./build.sh && ./make-dmg.sh`, and
+  `gh release create v$VERSION build/Quill.dmg`.
 - whisper.xcframework is cached (`~/VoiceInk-Dependencies`, key `whisper-xcframework-v1`).
-- `promotion.yml` — weekly (Thu 09:00 UTC) + on-demand. Diffs `main` vs `nightly`;
-  if different, verifies nightly (lint + build) and runs `.github/scripts/promote.sh`,
-  which sets `main`'s tree to `nightly` and pushes → triggers the Stable release. No
-  manual step. **Needs the `PROMOTION_TOKEN` secret** (a PAT, *not* GITHUB_TOKEN —
-  a GITHUB_TOKEN push to main won't trigger ci.yml; scopes: Contents R/W, PRs R/W,
-  Workflows R/W).
-- **Homebrew casks** live in the `rafay99-epic/homebrew-apps` tap (`quill` +
-  `quill-nightly`). The release jobs auto-bump them via `.github/scripts/bump-cask.sh`
-  — **needs the `TAP_TOKEN` secret** (fine-grained PAT, Contents R/W on
-  `homebrew-apps`). Both cask-bump steps skip with a `::warning::` if the secret is
-  absent, so a missing token never fails a release.
-- **Branch model (house rule):** feature → `nightly` → PR; `main` is protected Stable.
+- **Homebrew cask** — the `quill` cask lives in the `rafay99-epic/homebrew-apps` tap;
+  the release job auto-bumps it via `.github/scripts/bump-cask.sh` (**needs the
+  `TAP_TOKEN` secret**, fine-grained PAT, Contents R/W on `homebrew-apps`; skips with
+  a `::warning::` if absent so a missing token never fails a release). The old
+  `quill-nightly` cask is now orphaned — clean it from the tap when convenient.
+- The `PROMOTION_TOKEN` secret is no longer used (promotion.yml is gone); leave or
+  delete it.
+- **Branch model (house rule):** work on **`dev`** → test locally with `./dev.sh`
+  (installs `/Applications/Quill Dev.app`; the Dev channel is local-only —
+  `make-dmg.sh` refuses it) → open a PR **`dev` → `main`** (CI builds a test DMG
+  artifact) → merge to `main` to cut the Stable release. `main` is protected Stable.
   `.swiftlint.yml` is the permissive house config — if CI lint trips on inherited
   upstream code, add the rule to `disabled_rules` rather than churning files.
 
