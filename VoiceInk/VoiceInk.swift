@@ -23,7 +23,9 @@ struct VoiceInkApp: App {
     @StateObject private var activeWindowService = ActiveWindowService.shared
     @AppStorage("hasCompletedOnboardingV2") private var hasCompletedOnboardingV2 = false
     @AppStorage("enableAnnouncements") private var enableAnnouncements = true
-    @State private var showMenuBarIcon = true
+    // Persisted so the menu bar item's visibility survives relaunch and stays in
+    // sync with the Settings toggle (both read this same key).
+    @AppStorage("ShowMenuBarIcon") private var showMenuBarIcon = true
     @State private var didShowAccessibilityReminder = false
 
     // Audio cleanup manager for automatic deletion of old audio files
@@ -325,7 +327,6 @@ struct VoiceInkApp: App {
                         })
                 }
             }
-            .confettiCelebrationPresenter()
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: AppWindowLayout.width, height: AppWindowLayout.minimumHeight)
@@ -400,23 +401,49 @@ struct VoiceInkApp: App {
 class UpdaterViewModel: ObservableObject {
     private let updater = Updater()
 
+    /// How often to auto-check while the app is running. 4 hours — the same cadence
+    /// the old Sparkle feed used (SUScheduledCheckInterval = 14400s).
+    private let checkInterval: TimeInterval = 4 * 60 * 60
+    private var checkTimer: Timer?
+    /// Retained so the block-based observer can be removed in `deinit`.
+    private var installObserver: NSObjectProtocol?
+    /// The version we last surfaced a prompt for, so the recurring timer doesn't
+    /// re-nag every interval for an update the user already saw (and dismissed).
+    private var lastPromptedVersion: String?
+
     /// Always enabled for Stable/Nightly; disabled on the Dev channel (no feed).
     @Published var canCheckForUpdates = Channel.current.updatesEnabled
     @Published var automaticallyChecksForUpdates =
         UserDefaults.standard.bool(forKey: Updater.autoCheckDefaultsKey)
 
     init() {
-        // Honor the opt-in auto-check on launch (default off for this fork).
-        Task { @MainActor in
-            if let available = await updater.checkOnLaunch() {
-                presentUpdatePrompt(available)
-            }
+        // Register the update-notification delegate now (at launch) so tapping a
+        // notification delivered in a previous session is still handled.
+        UpdateNotifier.shared.activate()
+        // Check once on launch, then keep a recurring timer running while enabled.
+        Task { @MainActor in await autoCheck() }
+        startOrStopTimer()
+        // The system update notification's Install action (and tap) posts this —
+        // re-check the feed and install. Routed through NotificationCenter so it
+        // works even after a restart (no captured in-memory handler).
+        installObserver = NotificationCenter.default.addObserver(
+            forName: .updateInstallRequested, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.installLatestIfAvailable() }
         }
+    }
+
+    deinit {
+        if let installObserver {
+            NotificationCenter.default.removeObserver(installObserver)
+        }
+        checkTimer?.invalidate()
     }
 
     func setAutomaticallyChecksForUpdates(_ value: Bool) {
         automaticallyChecksForUpdates = value
         UserDefaults.standard.set(value, forKey: Updater.autoCheckDefaultsKey)
+        startOrStopTimer()
     }
 
     func checkForUpdates() {
@@ -424,13 +451,67 @@ class UpdaterViewModel: ObservableObject {
         canCheckForUpdates = false
         Task { @MainActor in
             defer { canCheckForUpdates = Channel.current.updatesEnabled }
-            if let available = await updater.check() {
+            switch await updater.check() {
+            case .update(let available):
+                lastPromptedVersion = available.version
                 presentUpdatePrompt(available)
-            } else {
+            case .upToDate:
                 presentInfo(title: String(localized: "You're up to date"),
                             message: String(format: String(localized: "Quill %@ is the latest version."), Updater.currentVersion))
+            case .unavailable:
+                break // busy / channel disabled / network error — don't claim "up to date"
             }
         }
+    }
+
+    // MARK: - Auto-check (launch + recurring timer)
+
+    /// (Re)build the recurring check timer to match the current toggle + channel.
+    /// Called on launch and whenever the auto-check setting changes.
+    private func startOrStopTimer() {
+        checkTimer?.invalidate()
+        checkTimer = nil
+        guard automaticallyChecksForUpdates, Channel.current.updatesEnabled else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: checkInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.autoCheck() }
+        }
+        timer.tolerance = 10 * 60 // 10-min slack lets macOS coalesce wakeups (battery-friendly)
+        checkTimer = timer
+    }
+
+    /// Silent background check (launch + timer). Only prompts when a *newer* version
+    /// appears, and never twice for the same version in one run.
+    private func autoCheck() async {
+        guard automaticallyChecksForUpdates, Channel.current.updatesEnabled else { return }
+        guard case .update(let available) = await updater.check(),
+              available.version != lastPromptedVersion else { return }
+        lastPromptedVersion = available.version
+        surfaceUpdate(available)
+    }
+
+    /// Triggered by the system update notification's Install action. Re-checks the
+    /// feed and installs if an update is still available — relies on no in-memory
+    /// state, so it works even if the app was restarted since the notification.
+    func installLatestIfAvailable() {
+        Task { @MainActor in
+            if case .update(let available) = await updater.check() {
+                startInstall(available)
+            }
+        }
+    }
+
+    /// Background update found → surface it without interrupting: a small in-app
+    /// banner (with an "Update" action) AND a macOS system notification (with an
+    /// "Install" action). Either one installs. (Manual checks use the NSAlert below.)
+    private func surfaceUpdate(_ available: Updater.Available) {
+        NotificationManager.shared.showNotification(
+            title: String(format: String(localized: "Quill %@ available"), available.version),
+            type: .info,
+            duration: 10,
+            onTap: { [weak self] in self?.startInstall(available) },
+            actionButton: (label: String(localized: "Update"), action: { [weak self] in self?.startInstall(available) })
+        )
+        UpdateNotifier.shared.notifyUpdateAvailable(version: available.version)
     }
 
     private func presentUpdatePrompt(_ available: Updater.Available) {
@@ -442,6 +523,12 @@ class UpdaterViewModel: ObservableObject {
         alert.addButton(withTitle: String(localized: "Install"))
         alert.addButton(withTitle: String(localized: "Later"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
+        startInstall(available)
+    }
+
+    /// Download + install the update, then relaunch. If an in-place replace wasn't
+    /// possible the DMG is opened — tell the user to finish by dragging it in.
+    private func startInstall(_ available: Updater.Available) {
         Task { @MainActor in
             let installed = await updater.install(available)
             if !installed {

@@ -6,6 +6,7 @@ class MenuBarManager: ObservableObject {
     @Published var isMenuBarOnly: Bool {
         didSet {
             UserDefaults.standard.set(isMenuBarOnly, forKey: "IsMenuBarOnly")
+            enforceMenuBarAccessInvariant()
             updateAppActivationPolicy()
         }
     }
@@ -13,8 +14,22 @@ class MenuBarManager: ObservableObject {
     private var modelContainer: ModelContainer?
     private var engine: VoiceInkEngine?
 
+    /// Never strand the app with no UI: hiding the dock icon while the menu bar icon
+    /// is also hidden leaves no way to reopen the app, so force the menu bar icon
+    /// back on. Enforced from `didSet` (covers every write path) AND from `init`
+    /// (so a persisted bad state — both hidden — is corrected at startup, where
+    /// `didSet` doesn't fire for the initial assignment).
+    private func enforceMenuBarAccessInvariant() {
+        guard isMenuBarOnly else { return }
+        let menuBarShown = UserDefaults.standard.object(forKey: "ShowMenuBarIcon") as? Bool ?? true
+        if !menuBarShown {
+            UserDefaults.standard.set(true, forKey: "ShowMenuBarIcon")
+        }
+    }
+
     init() {
         self.isMenuBarOnly = UserDefaults.standard.bool(forKey: "IsMenuBarOnly")
+        enforceMenuBarAccessInvariant()
         updateAppActivationPolicy()
 
         NotificationCenter.default.addObserver(

@@ -165,10 +165,12 @@ pull the upstream developer's signed builds (which would clobber the patch).
   latest full release (`v0.<n>`, numeric compare); Nightly → newest pre-release
   (ordered by the `build <n>` parsed from the title, since the `nightly` tag is
   reused). Downloads the channel DMG (`Quill.dmg` / `Quill-Nightly.dmg`), mounts,
-  replaces the bundle in place, relaunches. Auto-check on launch is **off by default**
-  (`QuillAutoCheckUpdates`).
+  replaces the bundle in place, relaunches.
 - `UpdaterViewModel` in `VoiceInk.swift` wraps it and drives "Check for Updates…"
-  (menus + Settings) with plain NSAlerts. **No Sparkle, no appcast.xml, no EdDSA
+  (menus + Settings) with plain NSAlerts. The Settings "Auto-check Updates" toggle
+  persists to `QuillAutoCheckUpdates` (**off by default**); when on, it checks at
+  launch **and on a recurring 4h `Timer`** (`checkInterval`), guarded by
+  `lastPromptedVersion` so it never re-nags for a version already dismissed. **No Sparkle, no appcast.xml, no EdDSA
   keys.** The `SU*` Info.plist keys and the upstream `announcementsURL` were removed/
   repointed off `beingpax.github.io`.
 - If you re-sync upstream, do not re-add Sparkle or restore `SUFeedURL`.

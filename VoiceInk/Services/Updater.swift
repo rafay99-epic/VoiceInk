@@ -32,6 +32,15 @@ final class Updater {
         let buildNumber: Int?
     }
 
+    /// Result of a feed check. `unavailable` (busy / Dev channel / network or parse
+    /// error) is distinct from `upToDate` so a manual check that overlaps a running
+    /// auto-check never falsely reports "you're up to date".
+    enum CheckOutcome {
+        case update(Available)
+        case upToDate
+        case unavailable
+    }
+
     private(set) var available: Available?
     private(set) var isChecking = false
     private(set) var isInstalling = false
@@ -52,19 +61,11 @@ final class Updater {
 
     // MARK: - Check
 
-    /// Background check on launch — only when the channel updates and the user has
-    /// opted in. Returns the available update (if any) without presenting UI.
-    @discardableResult
-    func checkOnLaunch() async -> Available? {
-        guard Channel.current.updatesEnabled,
-              UserDefaults.standard.bool(forKey: Self.autoCheckDefaultsKey) else { return nil }
-        return await check()
-    }
-
-    /// Check the feed. Returns the newer release if one exists, else nil.
-    @discardableResult
-    func check() async -> Available? {
-        guard Channel.current.updatesEnabled, !isBusy else { return nil }
+    /// Check the feed. `.update` if a newer release exists, `.upToDate` if not, and
+    /// `.unavailable` if the check couldn't run (channel disabled, already busy, or
+    /// the request failed) — the caller must NOT treat `.unavailable` as up to date.
+    func check() async -> CheckOutcome {
+        guard Channel.current.updatesEnabled, !isBusy else { return .unavailable }
         isChecking = true
         defer { isChecking = false }
 
@@ -72,14 +73,14 @@ final class Updater {
             let releases = try await fetchReleases()
             guard let best = pickBest(from: releases), isNewer(best) else {
                 available = nil
-                return nil
+                return .upToDate
             }
             available = best
             logger.info("update available: \(best.version, privacy: .public) (build \(best.buildNumber ?? -1))")
-            return best
+            return .update(best)
         } catch {
             logger.error("update check failed: \(error.localizedDescription, privacy: .public)")
-            return nil
+            return .unavailable
         }
     }
 
