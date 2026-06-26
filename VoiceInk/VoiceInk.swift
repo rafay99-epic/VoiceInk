@@ -463,7 +463,23 @@ class UpdaterViewModel: ObservableObject {
         guard let available = await updater.check(),
               available.version != lastPromptedVersion else { return }
         lastPromptedVersion = available.version
-        presentUpdatePrompt(available)
+        surfaceUpdate(available)
+    }
+
+    /// Background update found → surface it without interrupting: a small in-app
+    /// banner (with an "Update" action) AND a macOS system notification (with an
+    /// "Install" action). Either one installs. (Manual checks use the NSAlert below.)
+    private func surfaceUpdate(_ available: Updater.Available) {
+        NotificationManager.shared.showNotification(
+            title: String(format: String(localized: "Quill %@ available"), available.version),
+            type: .info,
+            duration: 10,
+            onTap: { [weak self] in self?.startInstall(available) },
+            actionButton: (label: String(localized: "Update"), action: { [weak self] in self?.startInstall(available) })
+        )
+        UpdateNotifier.shared.notifyUpdateAvailable(version: available.version) { [weak self] in
+            Task { @MainActor in self?.startInstall(available) }
+        }
     }
 
     private func presentUpdatePrompt(_ available: Updater.Available) {
@@ -475,6 +491,12 @@ class UpdaterViewModel: ObservableObject {
         alert.addButton(withTitle: String(localized: "Install"))
         alert.addButton(withTitle: String(localized: "Later"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
+        startInstall(available)
+    }
+
+    /// Download + install the update, then relaunch. If an in-place replace wasn't
+    /// possible the DMG is opened — tell the user to finish by dragging it in.
+    private func startInstall(_ available: Updater.Available) {
         Task { @MainActor in
             let installed = await updater.install(available)
             if !installed {
