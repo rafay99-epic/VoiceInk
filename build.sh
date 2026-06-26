@@ -104,7 +104,11 @@ if [ "$SIGN_IDENTITY" != "-" ]; then
   # `security … | grep -q` can report the whole pipeline as failed when grep exits
   # early (matches) and `security` is killed by SIGPIPE — a false negative that would
   # silently downgrade to ad-hoc signing. A here-string has no upstream process.
-  SIGN_IDENTITIES="$(security find-identity -p codesigning)"
+  #
+  # `|| true`: under `set -e` a non-zero exit from `security` (e.g. no keychain) would
+  # abort the whole build; instead let it yield an empty list and fall through to the
+  # ad-hoc fallback below.
+  SIGN_IDENTITIES="$(security find-identity -p codesigning 2>/dev/null || true)"
   if ! grep -qF "\"$SIGN_IDENTITY\"" <<< "$SIGN_IDENTITIES"; then
     echo "QUILL_SIGN_IDENTITY=\"$SIGN_IDENTITY\" not found in keychain; falling back to ad-hoc." >&2
     SIGN_IDENTITY="-"
