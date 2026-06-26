@@ -15,6 +15,7 @@ struct SettingsView: View {
     @ObservedObject private var playbackController = PlaybackController.shared
     @AppStorage("hasCompletedOnboardingV2") private var hasCompletedOnboardingV2 = true
     @AppStorage("enableAnnouncements") private var enableAnnouncements = true
+    @AppStorage("ShowMenuBarIcon") private var showMenuBarIcon = true
     @AppStorage("restoreClipboardAfterPaste") private var restoreClipboardAfterPaste = true
     @AppStorage("clipboardRestoreDelay") private var clipboardRestoreDelay = 2.0
     @AppStorage(PasteMethod.userDefaultsKey) private var pasteMethodRawValue = PasteMethod.standard.rawValue
@@ -148,7 +149,7 @@ struct SettingsView: View {
                     isExpanded: $isRestoreClipboardExpanded,
                     isEnabled: $restoreClipboardAfterPaste,
                     label: "Keep Clipboard Content",
-                    infoMessage: "VoiceInk temporarily uses the clipboard to paste transcription. When enabled, it restores your previous clipboard content after the selected delay. When disabled, the pasted transcription stays on your clipboard."
+                    infoMessage: "Quill temporarily uses the clipboard to paste transcription. When enabled, it restores your previous clipboard content after the selected delay. When disabled, the pasted transcription stays on your clipboard."
                 ) {
                     Picker("Restore Delay", selection: $clipboardRestoreDelay) {
                         Text("250ms").tag(0.25)
@@ -219,7 +220,20 @@ struct SettingsView: View {
             }
 
             Section("General") {
+                Toggle("Show Menu Bar Icon", isOn: $showMenuBarIcon)
+                    .onChange(of: showMenuBarIcon) { _, newValue in
+                        // Never let the user hide both the menu bar icon and the
+                        // dock icon — that strands the app with no way back. If the
+                        // menu bar icon is going away while the dock is hidden,
+                        // bring the dock icon back so Settings stays reachable.
+                        if !newValue && menuBarManager.isMenuBarOnly {
+                            menuBarManager.isMenuBarOnly = false
+                        }
+                    }
+
                 Toggle("Hide Dock Icon", isOn: $menuBarManager.isMenuBarOnly)
+                    .disabled(!showMenuBarIcon)
+                    .help(showMenuBarIcon ? "" : "Show the menu bar icon first — hiding both would leave no way to open the app.")
 
                 LaunchAtLogin.Toggle("Launch at Login")
 
@@ -300,10 +314,10 @@ struct SettingsView: View {
         } message: {
             Text("You'll see the introduction screens again the next time you launch the app.")
         }
-        .alert("Restart VoiceInk to Apply Language", isPresented: $showLanguageRestartAlert) {
+        .alert("Restart Quill to Apply Language", isPresented: $showLanguageRestartAlert) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text("Your language change will take full effect after you quit and reopen VoiceInk.")
+            Text("Your language change will take full effect after you quit and reopen Quill.")
         }
     }
 

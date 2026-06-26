@@ -167,32 +167,9 @@ struct OnboardingView: View {
                             )
                         },
                         onContinue: {
-                            coordinator.flow.goToLicenseStep(
-                                isTranscriptionSetupReady: isTranscriptionSetupReady
-                            )
-                        }
-                    )
-                        .transition(.opacity)
-                case .license:
-                    OnboardingLicenseScreen(
-                        licenseViewModel: coordinator.licenseViewModel,
-                        onBack: {
-                            coordinator.flow.goToPreviousLicenseStep(
-                                isTranscriptionSetupReady: isTranscriptionSetupReady
-                            )
-                        },
-                        onPurchase: {
-                            coordinator.licenseViewModel.openPurchaseLink()
-                        },
-                        onStartTrial: {
-                            coordinator.flow.startLicenseTrial(
-                                isTranscriptionSetupReady: isTranscriptionSetupReady
-                            ) {
-                                hasCompletedOnboardingV2 = true
-                            }
-                        },
-                        onActivate: coordinator.flow.activateLicense,
-                        onFinish: {
+                            // License step removed in this fork — Trust is the last
+                            // screen, so finish onboarding here instead of routing
+                            // through the (now-bypassed) license screen.
                             coordinator.flow.completeOnboarding(
                                 isTranscriptionSetupReady: isTranscriptionSetupReady
                             ) {

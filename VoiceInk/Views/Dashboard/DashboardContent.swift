@@ -14,8 +14,6 @@ struct DashboardContent: View {
     private static let insightsUnlockDuration: TimeInterval = 30 * 60
     private static let peakHoursUnlockDuration: TimeInterval = 30 * 60
     let modelContext: ModelContext
-    let licenseState: LicenseViewModel.LicenseState
-    let onAddLicenseKey: () -> Void
 
     @State private var statsSummary: DashboardStatsSummary = .empty
     @State private var hasLoadedStatsSnapshot: Bool = false
@@ -41,13 +39,9 @@ struct DashboardContent: View {
     }
 
     init(
-        modelContext: ModelContext,
-        licenseState: LicenseViewModel.LicenseState,
-        onAddLicenseKey: @escaping () -> Void
+        modelContext: ModelContext
     ) {
         self.modelContext = modelContext
-        self.licenseState = licenseState
-        self.onAddLicenseKey = onAddLicenseKey
 
         let cachedSummary = DashboardStatsCache.shared.currentSummary()
         _statsSummary = State(initialValue: cachedSummary ?? .empty)
@@ -104,8 +98,6 @@ struct DashboardContent: View {
 
     private func dashboardMainContent(availableWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: DashboardLayout.sectionSpacing) {
-            licenseStatusMessage
-
             greetingHeader
 
             nameEditorDismissArea {
@@ -219,7 +211,7 @@ struct DashboardContent: View {
             return String(localized: "View dashboard insights")
         }
 
-        return String(localized: "Continue using VoiceInk to unlock these stats.")
+        return String(localized: "Continue using Quill to unlock these stats.")
     }
 
     private var insightsActionAccessibilityLabel: String {
@@ -364,32 +356,6 @@ struct DashboardContent: View {
 
     // MARK: - Sections
 
-    @ViewBuilder
-    private var licenseStatusMessage: some View {
-        switch licenseState {
-        case .unlicensed:
-            TrialMessageView(
-                message: Text("Activate a license to continue using VoiceInk."),
-                type: .licenseRequired,
-                onAddLicenseKey: onAddLicenseKey
-            )
-        case .trial(let daysRemaining):
-            TrialMessageView(
-                message: Text(String(localized: "You have \(daysRemaining) days left in your trial")),
-                type: daysRemaining <= 2 ? .warning : .info,
-                onAddLicenseKey: onAddLicenseKey
-            )
-        case .trialExpired:
-            TrialMessageView(
-                message: nil,
-                type: .expired,
-                onAddLicenseKey: onAddLicenseKey
-            )
-        case .licensed:
-            EmptyView()
-        }
-    }
-
     private var dashboardInsightsView: some View {
         DashboardInsightsView(
             selectedPeriod: $selectedProductivityPeriod,
@@ -423,7 +389,7 @@ struct DashboardContent: View {
                 footerActionLabel(
                     icon: isSystemInfoCopied ? "checkmark" : "doc.on.doc",
                     title: isSystemInfoCopied ? "Copied!" : "Copy System Info",
-                    color: isSystemInfoCopied ? AppTheme.Sidebar.license : AppTheme.Sidebar.fallback
+                    color: isSystemInfoCopied ? AppTheme.Status.positive : AppTheme.Sidebar.fallback
                 )
             }
             .buttonStyle(.plain)
@@ -581,7 +547,7 @@ struct DashboardContent: View {
 
     private var headerSubtitle: String {
         guard hasLoadedStatsSnapshot else {
-            return String(localized: "Pulling together your VoiceInk activity.")
+            return String(localized: "Pulling together your Quill activity.")
         }
 
         guard statsSummary.totalCount > 0 else {
@@ -686,7 +652,7 @@ private struct DashboardAccessibilityReminder: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text("Required for VoiceInk shortcuts and app-wide controls to work properly.")
+                Text("Required for Quill shortcuts and app-wide controls to work properly.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
