@@ -186,7 +186,10 @@ struct DashboardContent: View {
     }
 
     private var canViewInsights: Bool {
-        hasLoadedStatsSnapshot && statsSummary.totalDuration >= Self.insightsUnlockDuration
+        // Unlocked build: no 30-minute usage gate — Insights is available as soon as
+        // stats have loaded. (Upstream required statsSummary.totalDuration >=
+        // insightsUnlockDuration.)
+        hasLoadedStatsSnapshot
     }
 
     private var shouldShowLockedInsightsState: Bool {
@@ -194,9 +197,9 @@ struct DashboardContent: View {
     }
 
     private var canViewPeakHours: Bool {
-        hasLoadedStatsSnapshot &&
-            selectedTotals.duration >= Self.peakHoursUnlockDuration &&
-            selectedPeakHours.hasData
+        // Unlocked build: drop the usage-duration gate; still require data in the
+        // selected period so the chart isn't empty.
+        hasLoadedStatsSnapshot && selectedPeakHours.hasData
     }
 
     private var shouldLockPeakHours: Bool {

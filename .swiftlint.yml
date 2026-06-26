@@ -1,0 +1,20 @@
+# Permissive SwiftLint config matching the house style (Crisp/Porter/Vitals share
+# this exact disabled set). Rules that fire on size/length/naming are off — they're
+# noise on a large app. NOTE: this is a fork of a big upstream codebase; if CI lint
+# surfaces violations in inherited upstream code, add the offending rule here rather
+# than churning unrelated files.
+disabled_rules:
+  - line_length
+  - identifier_name
+  - file_length
+  - type_body_length
+  - function_body_length
+  - cyclomatic_complexity
+  - todo
+
+excluded:
+  - .build
+  - build
+  - .local-build
+  - whisper.cpp
+  - DerivedData

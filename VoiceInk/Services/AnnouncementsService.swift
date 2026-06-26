@@ -9,8 +9,10 @@ final class AnnouncementsService {
 
     // MARK: - Configuration
 
-    // Hosted via GitHub Pages for this repo
-    private let announcementsURL = URL(string: "https://beingpax.github.io/VoiceInk/announcements.json")!
+    // Hosted via GitHub Pages for this fork — repointed off upstream so the
+    // upstream developer can't push banners into this build. (Fetch fails silently
+    // until/unless this fork actually publishes an announcements.json.)
+    private let announcementsURL = URL(string: "https://rafay99-epic.github.io/VoiceInk/announcements.json")!
 
     // Fetch every 4 hours
     private let refreshInterval: TimeInterval = 4 * 60 * 60

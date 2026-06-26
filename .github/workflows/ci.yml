@@ -1,0 +1,99 @@
+name: CI
+
+# Build + release in one pipeline so the build users receive is the exact one that
+# passed lint. Lint is the gate: on `main` the release builds + publishes after it
+# passes; on PRs the DMG builds + uploads as an artifact instead. Mirrors the
+# Crisp/Porter CI shape, adapted to VoiceInk's Xcode project (builds via ./build.sh
+# → xcodebuild + whisper.cpp, packages via ./make-dmg.sh).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "VoiceInk/**"
+      - "VoiceInk.xcodeproj/**"
+      - "build.sh"
+      - "make-dmg.sh"
+      - "Makefile"
+      - "LocalBuild.xcconfig"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "VoiceInk/**"
+      - "VoiceInk.xcodeproj/**"
+      - "build.sh"
+      - "make-dmg.sh"
+      - "Makefile"
+      - "LocalBuild.xcconfig"
+      - ".github/workflows/ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: Quality (SwiftLint)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint --reporter github-actions-logging
+
+  package:
+    name: Build & package DMG
+    if: github.event_name == 'pull_request'
+    runs-on: macos-26
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+      # whisper.xcframework is expensive to build and rarely changes — cache it.
+      - name: Cache whisper.cpp framework
+        uses: actions/cache@v4
+        with:
+          path: ~/VoiceInk-Dependencies
+          key: whisper-xcframework-v1
+      - name: Build app and installer
+        run: |
+          ./build.sh
+          ./make-dmg.sh
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Quill-dmg
+          path: build/Quill.dmg
+
+  release:
+    name: Build and publish release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    needs: [lint]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history — the version is the commit count
+      - name: Cache whisper.cpp framework
+        uses: actions/cache@v4
+        with:
+          path: ~/VoiceInk-Dependencies
+          key: whisper-xcframework-v1
+      - name: Compute version
+        run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+      - name: Build app and installer
+        run: |
+          export QUILL_VERSION="$VERSION"
+          ./build.sh
+          ./make-dmg.sh
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" build/Quill.dmg \
+            --title "Quill $VERSION" --generate-notes

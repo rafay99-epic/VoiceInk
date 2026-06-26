@@ -25,11 +25,11 @@ class LicenseViewModel: ObservableObject {
     private let licenseManager = LicenseManager.shared
 
     init() {
-        #if LOCAL_BUILD
+        // Unlocked build: licensing/trial is fully disabled, so the app always
+        // reports a valid license regardless of build configuration. The Polar
+        // license/activation paths and the 7-day trial are dead code kept only
+        // so the rest of the app compiles unchanged.
         licenseState = .licensed
-        #else
-        loadLicenseState()
-        #endif
     }
 
     func startTrial() {
@@ -64,15 +64,13 @@ class LicenseViewModel: ObservableObject {
     }
 
     var isLicensed: Bool {
-        if case .licensed = licenseState {
-            return true
-        }
-
-        return false
+        // Unlocked build: always licensed.
+        return true
     }
 
     private func setUnlicensedState() {
-        licenseState = .unlicensed
+        // Unlocked build: never downgrade out of the licensed state.
+        licenseState = .licensed
     }
 
     private func refreshTrialState() {
@@ -85,34 +83,19 @@ class LicenseViewModel: ObservableObject {
     }
 
     private func refreshTrialState(from trialStartDate: Date) {
-        let daysSinceTrialStart = Calendar.current.dateComponents([.day], from: trialStartDate, to: Date()).day ?? 0
-
-        if daysSinceTrialStart >= trialPeriodDays {
-            licenseState = .trialExpired
-        } else {
-            licenseState = .trial(daysRemaining: trialPeriodDays - daysSinceTrialStart)
-        }
+        // Unlocked build: the trial clock is disabled — stay licensed.
+        licenseState = .licensed
     }
-    
+
     var canUseApp: Bool {
-        switch licenseState {
-        case .licensed, .trial:
-            return true
-        case .unlicensed, .trialExpired:
-            return false
-        }
+        // Unlocked build: no licensing restrictions.
+        return true
     }
 
     var usageRestrictionMessage: String? {
-        switch licenseState {
-        case .unlicensed, .trialExpired:
-            return String(
-                format: String(localized: "Your trial has ended. Upgrade to VoiceInk Pro at %@"),
-                "tryvoiceink.com/buy"
-            )
-        case .trial, .licensed:
-            return nil
-        }
+        // Unlocked build: never show the upgrade/paywall nag, and never prepend
+        // it to transcribed text (see TranscriptionDelivery.deliverableText).
+        return nil
     }
     
     func openPurchaseLink() {

@@ -1,0 +1,74 @@
+name: Nightly
+
+# Push to `nightly` → build the Nightly channel and refresh a single rolling
+# `nightly` pre-release. Lint gates the publish, so a red check never reaches
+# testers' updater. The release title MUST contain "build <n>" — the Nightly
+# updater parses it to order pre-releases (the tag is reused, so the version
+# string can't). Mirrors Crisp/Porter nightly.yml.
+on:
+  workflow_dispatch:
+  push:
+    branches: [nightly]
+    paths:
+      - "VoiceInk/**"
+      - "VoiceInk.xcodeproj/**"
+      - "build.sh"
+      - "make-dmg.sh"
+      - "Makefile"
+      - "LocalBuild.xcconfig"
+      - ".github/workflows/nightly.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    name: Quality (SwiftLint)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install swiftlint
+      - run: swiftlint --reporter github-actions-logging
+
+  release:
+    name: Build & publish nightly
+    runs-on: macos-26
+    needs: [lint]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # version is the commit count
+      - name: Cache whisper.cpp framework
+        uses: actions/cache@v4
+        with:
+          path: ~/VoiceInk-Dependencies
+          key: whisper-xcframework-v1
+      - name: Compute version
+        run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+      - name: Build app and installer
+        run: |
+          export QUILL_CHANNEL=nightly
+          export QUILL_VERSION="$VERSION"
+          export QUILL_BUILD="${{ github.run_number }}"
+          ./build.sh
+          ./make-dmg.sh
+      - name: Refresh rolling nightly pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Reuse the single `nightly` tag/release. Clobber the asset, and set a
+          # title carrying the build number the updater parses ("build <n>").
+          TITLE="Quill Nightly $VERSION (build ${{ github.run_number }})"
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release upload nightly build/Quill-Nightly.dmg --clobber
+            gh release edit nightly --title "$TITLE" --prerelease --latest=false
+          else
+            gh release create nightly build/Quill-Nightly.dmg \
+              --title "$TITLE" --prerelease --notes "Rolling nightly build." --target nightly
+          fi

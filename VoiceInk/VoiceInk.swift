@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import Sparkle
 import AppKit
 import OSLog
 import AppIntents
@@ -393,31 +392,71 @@ struct VoiceInkApp: App {
     }
 }
 
+/// Drives the custom GitHub-release `Updater` (Sparkle was removed — see
+/// `Services/Updater.swift`). Keeps the same surface the menus/settings expect:
+/// `canCheckForUpdates`, `automaticallyChecksForUpdates`, `checkForUpdates()`,
+/// `setAutomaticallyChecksForUpdates(_:)`.
+@MainActor
 class UpdaterViewModel: ObservableObject {
-    private let updaterController: SPUStandardUpdaterController
+    private let updater = Updater()
 
-    @Published var canCheckForUpdates = false
-    @Published var automaticallyChecksForUpdates = false
+    /// Always enabled for Stable/Nightly; disabled on the Dev channel (no feed).
+    @Published var canCheckForUpdates = Channel.current.updatesEnabled
+    @Published var automaticallyChecksForUpdates =
+        UserDefaults.standard.bool(forKey: Updater.autoCheckDefaultsKey)
 
     init() {
-        updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
-
-        automaticallyChecksForUpdates = updaterController.updater.automaticallyChecksForUpdates
-
-        updaterController.updater.publisher(for: \.canCheckForUpdates)
-            .assign(to: &$canCheckForUpdates)
-
-        updaterController.updater.publisher(for: \.automaticallyChecksForUpdates)
-            .assign(to: &$automaticallyChecksForUpdates)
+        // Honor the opt-in auto-check on launch (default off for this fork).
+        Task { @MainActor in
+            if let available = await updater.checkOnLaunch() {
+                presentUpdatePrompt(available)
+            }
+        }
     }
 
     func setAutomaticallyChecksForUpdates(_ value: Bool) {
-        updaterController.updater.automaticallyChecksForUpdates = value
+        automaticallyChecksForUpdates = value
+        UserDefaults.standard.set(value, forKey: Updater.autoCheckDefaultsKey)
     }
 
     func checkForUpdates() {
-        // This is for manual checks - will show UI
-        updaterController.checkForUpdates(nil)
+        guard canCheckForUpdates else { return }
+        canCheckForUpdates = false
+        Task { @MainActor in
+            defer { canCheckForUpdates = Channel.current.updatesEnabled }
+            if let available = await updater.check() {
+                presentUpdatePrompt(available)
+            } else {
+                presentInfo(title: String(localized: "You're up to date"),
+                            message: String(format: String(localized: "Quill %@ is the latest version."), Updater.currentVersion))
+            }
+        }
+    }
+
+    private func presentUpdatePrompt(_ available: Updater.Available) {
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Update Available")
+        alert.informativeText = String(
+            format: String(localized: "Quill %@ is available (you're on %@). Install and relaunch?"),
+            available.version, Updater.currentVersion)
+        alert.addButton(withTitle: String(localized: "Install"))
+        alert.addButton(withTitle: String(localized: "Later"))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        Task { @MainActor in
+            let installed = await updater.install(available)
+            if !installed {
+                presentInfo(title: String(localized: "Finish installing"),
+                            message: String(localized: "The update was downloaded and opened. Drag Quill into Applications to finish."))
+            }
+        }
+    }
+
+    private func presentInfo(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: String(localized: "OK"))
+        alert.runModal()
     }
 }
 

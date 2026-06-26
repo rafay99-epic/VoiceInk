@@ -4,7 +4,7 @@ WHISPER_CPP_DIR := $(DEPS_DIR)/whisper.cpp
 FRAMEWORK_PATH := $(WHISPER_CPP_DIR)/build-apple/whisper.xcframework
 LOCAL_DERIVED_DATA := $(CURDIR)/.local-build
 
-.PHONY: all clean whisper setup build local check healthcheck help dev run
+.PHONY: all clean whisper setup build local dmg check healthcheck help dev run
 
 # Default target
 all: check build
@@ -76,6 +76,19 @@ local: check setup
 		exit 1; \
 	fi
 
+# Package the local build into a distributable .dmg (drag-to-Applications installer)
+dmg: local
+	@echo "Packaging VoiceInk.dmg..."
+	@STAGING=$$(mktemp -d /tmp/voiceink-dmg.XXXXXX) && \
+	ditto "$$HOME/Downloads/VoiceInk.app" "$$STAGING/VoiceInk.app" && \
+	ln -s /Applications "$$STAGING/Applications" && \
+	rm -f "$$HOME/Downloads/VoiceInk.dmg" && \
+	hdiutil create -volname "VoiceInk" -srcfolder "$$STAGING" -ov -format UDZO "$$HOME/Downloads/VoiceInk.dmg" >/dev/null && \
+	rm -rf "$$STAGING" && \
+	echo "" && \
+	echo "DMG ready: ~/Downloads/VoiceInk.dmg" && \
+	echo "Open it, then drag VoiceInk into the Applications shortcut."
+
 # Run application
 run:
 	@if [ -d "$$HOME/Downloads/VoiceInk.app" ]; then \
@@ -107,6 +120,7 @@ help:
 	@echo "  setup              Copy whisper XCFramework to VoiceInk project"
 	@echo "  build              Build the VoiceInk Xcode project"
 	@echo "  local              Build for local use (no Apple Developer certificate needed)"
+	@echo "  dmg                Build, then package a drag-to-Applications VoiceInk.dmg"
 	@echo "  run                Launch the built VoiceInk app"
 	@echo "  dev                Build and run the app (for development)"
 	@echo "  all                Run full build process (default)"
