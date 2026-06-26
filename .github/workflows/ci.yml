@@ -68,11 +68,11 @@ jobs:
           sudo rm -rf /Library/Developer/CoreSimulator/Profiles/Runtimes/* 2>/dev/null || true
           sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/* 2>/dev/null || true
           df -h /
-      - name: Set up stable code-signing certificate
-        env:
-          MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
-          MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
-        run: bash .github/scripts/setup-signing.sh
+      # NOTE: deliberately NO code-signing step here. This job runs on
+      # `pull_request`, where the PR branch (which can be edited in the PR) would
+      # otherwise receive the signing secrets and could exfiltrate them. PR builds
+      # are throwaway test artifacts, so ad-hoc signing is fine — stable signing only
+      # happens in the `release` job, which runs on trusted pushes to `main`.
       - name: Build app and installer
         run: |
           ./build.sh

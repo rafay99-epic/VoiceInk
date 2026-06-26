@@ -29,8 +29,16 @@ rm -f "$CERT_P12"
 
 # Allow codesign to use the key without an interactive prompt.
 security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" "$KEYCHAIN" >/dev/null
-# Put our keychain first in the search list so `security find-identity` / codesign find it.
-security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/"//g')
+# Put our keychain first in the search list so `security find-identity` / codesign
+# find it, preserving the existing entries. Build an array so keychain paths that
+# contain spaces survive as single arguments (a bare $(...) would word-split them).
+existing_keychains=()
+while IFS= read -r kc; do
+  kc="${kc//\"/}"                       # strip the quotes `security` prints
+  kc="${kc#"${kc%%[![:space:]]*}"}"     # trim leading whitespace
+  [ -n "$kc" ] && existing_keychains+=("$kc")
+done < <(security list-keychains -d user)
+security list-keychains -d user -s "$KEYCHAIN" "${existing_keychains[@]}"
 
 # Discover the identity's name from the cert itself (robust to whatever CN was used).
 IDENTITY="$(security find-identity -p codesigning "$KEYCHAIN" | sed -n 's/.*"\(.*\)".*/\1/p' | head -1)"

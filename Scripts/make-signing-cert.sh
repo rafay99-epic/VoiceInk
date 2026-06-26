@@ -40,8 +40,10 @@ openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -days 3650 -nodes
 # Legacy PBE (SHA1/3DES + SHA1 MAC): OpenSSL 3's default PKCS#12 encryption
 # (AES-256/SHA-256) cannot be read by macOS's `security import` ("MAC verification
 # failed"), which is what CI uses. These flags keep the .p12 importable everywhere.
+# Pass the password via `env:` (not `pass:` on argv) so it isn't visible in `ps`.
+export P12_PW
 openssl pkcs12 -export -inkey "$KEY" -in "$CERT" -out "$P12" \
-  -name "$IDENTITY_NAME" -passout pass:"$P12_PW" \
+  -name "$IDENTITY_NAME" -passout env:P12_PW \
   -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1
 
 LOGIN_KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"

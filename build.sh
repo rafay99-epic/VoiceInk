@@ -99,7 +99,13 @@ if [ "$SIGN_IDENTITY" != "-" ]; then
   # avoid a fuzzy substring false-positive. No `-v` — a self-signed cert is a usable
   # signing identity even though it isn't "valid" (trusted) for verification; we only
   # need its private key to sign.
-  if ! security find-identity -p codesigning | grep -qF "\"$SIGN_IDENTITY\""; then
+  #
+  # Feed the listing via a here-string rather than a pipe: under `set -o pipefail`,
+  # `security … | grep -q` can report the whole pipeline as failed when grep exits
+  # early (matches) and `security` is killed by SIGPIPE — a false negative that would
+  # silently downgrade to ad-hoc signing. A here-string has no upstream process.
+  SIGN_IDENTITIES="$(security find-identity -p codesigning)"
+  if ! grep -qF "\"$SIGN_IDENTITY\"" <<< "$SIGN_IDENTITIES"; then
     echo "QUILL_SIGN_IDENTITY=\"$SIGN_IDENTITY\" not found in keychain; falling back to ad-hoc." >&2
     SIGN_IDENTITY="-"
   fi

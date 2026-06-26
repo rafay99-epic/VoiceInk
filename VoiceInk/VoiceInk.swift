@@ -410,6 +410,11 @@ class UpdaterViewModel: ObservableObject {
     /// The version we last surfaced a prompt for, so the recurring timer doesn't
     /// re-nag every interval for an update the user already saw (and dismissed).
     private var lastPromptedVersion: String?
+    /// Guards against concurrent install triggers (banner tap + action button +
+    /// notification + manual prompt can all fire `startInstall`). Without it a
+    /// second trigger could start another install and show a duplicate
+    /// "Finish installing" prompt. @MainActor-isolated, so a plain Bool is safe.
+    private var isInstalling = false
 
     /// Always enabled for Stable/Nightly; disabled on the Dev channel (no feed).
     @Published var canCheckForUpdates = Channel.current.updatesEnabled
@@ -485,6 +490,9 @@ class UpdaterViewModel: ObservableObject {
         guard automaticallyChecksForUpdates, Channel.current.updatesEnabled else { return }
         guard case .update(let available) = await updater.check(),
               available.version != lastPromptedVersion else { return }
+        // Re-validate after the awaited check: the user may have toggled auto-check
+        // off (or the channel changed) mid-request — don't notify if so.
+        guard automaticallyChecksForUpdates, Channel.current.updatesEnabled else { return }
         lastPromptedVersion = available.version
         surfaceUpdate(available)
     }
@@ -529,7 +537,10 @@ class UpdaterViewModel: ObservableObject {
     /// Download + install the update, then relaunch. If an in-place replace wasn't
     /// possible the DMG is opened — tell the user to finish by dragging it in.
     private func startInstall(_ available: Updater.Available) {
+        guard !isInstalling else { return }
+        isInstalling = true
         Task { @MainActor in
+            defer { isInstalling = false }
             let installed = await updater.install(available)
             if !installed {
                 presentInfo(title: String(localized: "Finish installing"),
