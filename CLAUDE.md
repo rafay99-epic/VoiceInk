@@ -113,7 +113,35 @@ account, no team. The project's `CODE_SIGN_IDENTITY`/`STYLE` are set to `-`/`Man
 and `DEVELOPMENT_TEAM` is empty (the upstream dev's team id `V6J6A3VWY2` and the
 `Apple Development` identity were removed). Ad-hoc signing **cannot** be dropped
 entirely — Apple Silicon refuses to launch an unsigned binary — but it requires
-nothing from the developer. Don't re-introduce a real identity/team.
+nothing from the developer. Don't re-introduce a real (Apple) identity/team.
+
+**Stable-signature caveat (the Accessibility-grant trap).** An ad-hoc signature is
+derived from the binary hash, so it changes on **every build**. macOS keys the
+Accessibility/Microphone (TCC) grant to the signature, so each update is seen as a
+"new app" and the dictation hotkey silently stops working until the user re-grants
+Accessibility (the toggle can still read as ON while being dead). To make the grant
+**persist across updates**, builds can be signed with a stable **self-signed**
+code-signing certificate — this needs **no Apple account** and is *not* an Apple
+identity/team (so it doesn't violate the rule above):
+
+- `build.sh` signs ad-hoc by default; export **`QUILL_SIGN_IDENTITY="<cert name>"`**
+  to sign the final bundle with that keychain identity instead. Absent/missing → it
+  falls back to ad-hoc, so a fresh clone still builds.
+- `Scripts/make-signing-cert.sh` generates the cert, imports it to the login keychain,
+  and prints a base64 `.p12` for CI. Run it once locally.
+- **CI** (`ci.yml` package+release, `nightly.yml` release) calls
+  `.github/scripts/setup-signing.sh`, which imports the cert from the
+  **`MACOS_SIGN_CERT_P12`** / **`MACOS_SIGN_CERT_PASSWORD`** secrets into a throwaway
+  keychain and sets `QUILL_SIGN_IDENTITY`. Missing secret → `::warning::` + ad-hoc
+  (same graceful-skip pattern as `TAP_TOKEN`). Because all distribution is via GitHub
+  releases, **the cert must live in CI** (a local-only cert can't sign the DMGs users
+  install) — use the *same* cert locally and in CI so local and released builds share
+  one signature. `make-dmg.sh` only `ditto`s the app, so `build.sh`'s signature is
+  what ships. (Gatekeeper still shows "unidentified developer" on first launch — that
+  is separate from TCC and unchanged.)
+- When the event tap fails to install (the only cause is a missing/stale Accessibility
+  grant), `Shortcuts/ShortcutMonitor.swift` now surfaces a "grant Accessibility"
+  notification instead of failing silently.
 
 Local build — no Apple Developer account needed (ad-hoc signing via
 `LocalBuild.xcconfig`, which also sets the `LOCAL_BUILD` flag, though the license

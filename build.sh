@@ -77,8 +77,40 @@ set_key QuillChannel "$CHANNEL"
 [ -n "$BUILD_NUMBER" ] && set_key QuillBuildNumber "$BUILD_NUMBER"
 [ "$CHANNEL" != "stable" ] && set_key QuillBuildInfo "$BRANCH@$SHA"
 
-# Re-seal: editing the top-level Info.plist invalidated the ad-hoc signature.
-codesign --force --sign - "$DEST_APP"
+# Re-seal: editing the top-level Info.plist invalidated the signature.
+#
+# Signing identity: ad-hoc (`-`) by default, which is all CI/a fresh clone needs.
+# But ad-hoc signatures are derived from the binary hash, so they change on EVERY
+# build — and macOS keys the Accessibility (TCC) grant to the signature, so the
+# dictation-hotkey permission silently dies on every local update and has to be
+# re-granted by hand.
+#
+# To make the grant stick across local rebuilds, export QUILL_SIGN_IDENTITY with the
+# name of a self-signed code-signing certificate from your login keychain. A stable
+# certificate gives the bundle a stable designated requirement, so TCC recognizes
+# each new build as the same app and the Accessibility grant persists. Create one
+# (no Apple account needed) via Keychain Access → Certificate Assistant → Create a
+# Certificate → "Self Signed Root" + "Code Signing", then:
+#   QUILL_SIGN_IDENTITY="Quill Local" ./build.sh
+SIGN_IDENTITY="${QUILL_SIGN_IDENTITY:--}"
+if [ "$SIGN_IDENTITY" != "-" ]; then
+  # Match the identity name exactly: `find-identity` prints each name wrapped in
+  # quotes (e.g. `1) ABC… "Quill Local Signing"`), so grep for the quoted string to
+  # avoid a fuzzy substring false-positive. No `-v` — a self-signed cert is a usable
+  # signing identity even though it isn't "valid" (trusted) for verification; we only
+  # need its private key to sign.
+  if ! security find-identity -p codesigning | grep -qF "\"$SIGN_IDENTITY\""; then
+    echo "QUILL_SIGN_IDENTITY=\"$SIGN_IDENTITY\" not found in keychain; falling back to ad-hoc." >&2
+    SIGN_IDENTITY="-"
+  fi
+fi
+if [ "$SIGN_IDENTITY" = "-" ]; then
+  codesign --force --sign - "$DEST_APP"
+else
+  echo "Signing with stable identity: $SIGN_IDENTITY (Accessibility grant will persist across builds)"
+  codesign --force --deep --sign "$SIGN_IDENTITY" \
+    --entitlements "$PWD/VoiceInk/VoiceInk.local.entitlements" "$DEST_APP"
+fi
 xattr -cr "$DEST_APP"
 
 # Reclaim the derived-data intermediates (several GB) now that the product is

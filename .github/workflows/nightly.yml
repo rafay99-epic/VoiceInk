@@ -18,6 +18,7 @@ on:
       - "LocalBuild.xcconfig"
       - ".swiftlint.yml"
       - ".github/workflows/nightly.yml"
+      - ".github/scripts/**"
 
 permissions:
   contents: read
@@ -58,6 +59,11 @@ jobs:
           df -h /
       - name: Compute version
         run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+      - name: Set up stable code-signing certificate
+        env:
+          MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
+          MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
+        run: bash .github/scripts/setup-signing.sh
       - name: Build app and installer
         run: |
           export QUILL_CHANNEL=nightly

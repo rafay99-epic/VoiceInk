@@ -24,6 +24,10 @@ final class ShortcutMonitor {
     private var onShortcutInterrupted: ((ShortcutAction, TimeInterval) -> Void)?
     private var eventTap: CFMachPort?
     private var eventTapRunLoopSource: CFRunLoopSource?
+    // Gates the "grant Accessibility" prompt so repeated install failures (the tap is
+    // (re)installed on every shortcut change) don't spam it. Reset once the tap
+    // installs, so a later permission revocation can warn again.
+    private var didWarnAccessibilityMissing = false
     private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "ShortcutMonitor")
 
     private static let shortcutInterruptionWindow: TimeInterval = 1.0
@@ -105,6 +109,12 @@ final class ShortcutMonitor {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             logger.error("Failed to install global shortcut event tap")
+            // The session event tap only returns nil when the process lacks
+            // Accessibility permission. Ad-hoc signed builds get a fresh code
+            // signature on every update, which silently invalidates the prior
+            // TCC grant (the toggle can still read as ON). Surface it instead of
+            // letting the hotkey die quietly.
+            notifyAccessibilityMissingIfNeeded()
             return false
         }
 
@@ -118,7 +128,30 @@ final class ShortcutMonitor {
         eventTapRunLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
+        didWarnAccessibilityMissing = false
         return true
+    }
+
+    /// Posts a "grant Accessibility" prompt when the event tap fails to install
+    /// because the process isn't trusted. Shown once per failed run (guarded by
+    /// `didWarnAccessibilityMissing`, reset on a successful install) so repeated
+    /// reinstalls don't spam it. Without this the hotkey just stops working with no
+    /// feedback (see `installEventTap`).
+    private func notifyAccessibilityMissingIfNeeded() {
+        guard !AXIsProcessTrusted(), !didWarnAccessibilityMissing else { return }
+        didWarnAccessibilityMissing = true
+        DispatchQueue.main.async {
+            NotificationManager.shared.showNotification(
+                title: String(localized: "Quill needs Accessibility permission to use the dictation hotkey"),
+                type: .warning,
+                duration: 8.0,
+                actionButton: (String(localized: "Open Settings"), {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                        NSWorkspace.shared.open(url)
+                    }
+                })
+            )
+        }
     }
 
     private func handleCGEvent(type: CGEventType, event: CGEvent) -> Bool {
