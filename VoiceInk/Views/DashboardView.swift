@@ -16,10 +16,9 @@ struct DashboardView: View {
     }
 
     private func navigateToLicenseManagement() {
-        NotificationCenter.default.post(
-            name: .navigateToDestination,
-            object: nil,
-            userInfo: ["destination": "Quill Pro"]
-        )
+        // No-op: the Quill Pro / license page was removed (the app is always
+        // licensed in this fork). This callback is unreachable — DashboardContent
+        // only invokes it from the "add license key" prompt, which never shows
+        // because licenseState is permanently `.licensed`.
     }
 }
