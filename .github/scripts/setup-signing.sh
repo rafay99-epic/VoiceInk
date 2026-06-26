@@ -10,8 +10,8 @@
 # Accessibility re-grant on update. Mirrors the graceful-skip pattern used for TAP_TOKEN.
 set -euo pipefail
 
-if [ -z "${MACOS_SIGN_CERT_P12:-}" ]; then
-  echo "::warning::MACOS_SIGN_CERT_P12 not set — building ad-hoc. Released builds will require re-granting Accessibility on each update. Run Scripts/make-signing-cert.sh and add the MACOS_SIGN_CERT_P12 / MACOS_SIGN_CERT_PASSWORD secrets to make the dictation-hotkey permission persist."
+if [ -z "${MACOS_SIGN_CERT_P12:-}" ] || [ -z "${MACOS_SIGN_CERT_PASSWORD:-}" ]; then
+  echo "::warning::MACOS_SIGN_CERT_P12 or MACOS_SIGN_CERT_PASSWORD not set — building ad-hoc. Released builds will require re-granting Accessibility on each update. Run Scripts/make-signing-cert.sh and add the MACOS_SIGN_CERT_P12 / MACOS_SIGN_CERT_PASSWORD secrets to make the dictation-hotkey permission persist."
   exit 0
 fi
 

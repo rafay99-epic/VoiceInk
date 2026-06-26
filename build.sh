@@ -94,9 +94,12 @@ set_key QuillChannel "$CHANNEL"
 #   QUILL_SIGN_IDENTITY="Quill Local" ./build.sh
 SIGN_IDENTITY="${QUILL_SIGN_IDENTITY:--}"
 if [ "$SIGN_IDENTITY" != "-" ]; then
-  # Note: no `-v` — a self-signed cert is a usable signing identity even though it
-  # isn't "valid" (trusted) for verification. We only need its private key to sign.
-  if ! security find-identity -p codesigning | grep -q "$SIGN_IDENTITY"; then
+  # Match the identity name exactly: `find-identity` prints each name wrapped in
+  # quotes (e.g. `1) ABC… "Quill Local Signing"`), so grep for the quoted string to
+  # avoid a fuzzy substring false-positive. No `-v` — a self-signed cert is a usable
+  # signing identity even though it isn't "valid" (trusted) for verification; we only
+  # need its private key to sign.
+  if ! security find-identity -p codesigning | grep -qF "\"$SIGN_IDENTITY\""; then
     echo "QUILL_SIGN_IDENTITY=\"$SIGN_IDENTITY\" not found in keychain; falling back to ad-hoc." >&2
     SIGN_IDENTITY="-"
   fi
