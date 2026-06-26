@@ -81,4 +81,9 @@ set_key QuillChannel "$CHANNEL"
 codesign --force --sign - "$DEST_APP"
 xattr -cr "$DEST_APP"
 
+# Reclaim the derived-data intermediates (several GB) now that the product is
+# copied to build/ — packaging (make-dmg.sh) needs disk headroom, and CI runners
+# run out of space otherwise (whisper.xcframework + derived data fill the volume).
+rm -rf "$DERIVED"
+
 echo "Built: $DEST_APP"

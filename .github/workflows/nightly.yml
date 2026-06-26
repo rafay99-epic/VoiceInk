@@ -50,6 +50,12 @@ jobs:
         with:
           path: ~/VoiceInk-Dependencies
           key: whisper-xcframework-v1
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /Library/Developer/CoreSimulator/Profiles/Runtimes/* 2>/dev/null || true
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/* 2>/dev/null || true
+          df -h /
       - name: Compute version
         run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
       - name: Build app and installer
