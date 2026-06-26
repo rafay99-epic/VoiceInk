@@ -219,7 +219,7 @@ struct DashboardContent: View {
             return String(localized: "View dashboard insights")
         }
 
-        return String(localized: "Continue using VoiceInk to unlock these stats.")
+        return String(localized: "Continue using Quill to unlock these stats.")
     }
 
     private var insightsActionAccessibilityLabel: String {
@@ -369,7 +369,7 @@ struct DashboardContent: View {
         switch licenseState {
         case .unlicensed:
             TrialMessageView(
-                message: Text("Activate a license to continue using VoiceInk."),
+                message: Text("Activate a license to continue using Quill."),
                 type: .licenseRequired,
                 onAddLicenseKey: onAddLicenseKey
             )
@@ -581,7 +581,7 @@ struct DashboardContent: View {
 
     private var headerSubtitle: String {
         guard hasLoadedStatsSnapshot else {
-            return String(localized: "Pulling together your VoiceInk activity.")
+            return String(localized: "Pulling together your Quill activity.")
         }
 
         guard statsSummary.totalCount > 0 else {
@@ -686,7 +686,7 @@ private struct DashboardAccessibilityReminder: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text("Required for VoiceInk shortcuts and app-wide controls to work properly.")
+                Text("Required for Quill shortcuts and app-wide controls to work properly.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

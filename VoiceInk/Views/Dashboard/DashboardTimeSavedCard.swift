@@ -39,7 +39,7 @@ struct DashboardTimeSavedCard: View {
             return "No time saved yet."
         }
 
-        return "\(savedTimeText) saved with VoiceInk. \(accessibilitySummary)"
+        return "\(savedTimeText) saved with Quill. \(accessibilitySummary)"
     }
 
     var body: some View {
@@ -59,7 +59,7 @@ struct DashboardTimeSavedCard: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.50)
 
-                        Text("with VoiceInk")
+                        Text("with Quill")
                             .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.Text.secondary)
                             .lineLimit(1)

@@ -23,7 +23,9 @@ struct VoiceInkApp: App {
     @StateObject private var activeWindowService = ActiveWindowService.shared
     @AppStorage("hasCompletedOnboardingV2") private var hasCompletedOnboardingV2 = false
     @AppStorage("enableAnnouncements") private var enableAnnouncements = true
-    @State private var showMenuBarIcon = true
+    // Persisted so the menu bar item's visibility survives relaunch and stays in
+    // sync with the Settings toggle (both read this same key).
+    @AppStorage("ShowMenuBarIcon") private var showMenuBarIcon = true
     @State private var didShowAccessibilityReminder = false
 
     // Audio cleanup manager for automatic deletion of old audio files
@@ -400,23 +402,29 @@ struct VoiceInkApp: App {
 class UpdaterViewModel: ObservableObject {
     private let updater = Updater()
 
+    /// How often to auto-check while the app is running. 4 hours — the same cadence
+    /// the old Sparkle feed used (SUScheduledCheckInterval = 14400s).
+    private let checkInterval: TimeInterval = 4 * 60 * 60
+    private var checkTimer: Timer?
+    /// The version we last surfaced a prompt for, so the recurring timer doesn't
+    /// re-nag every interval for an update the user already saw (and dismissed).
+    private var lastPromptedVersion: String?
+
     /// Always enabled for Stable/Nightly; disabled on the Dev channel (no feed).
     @Published var canCheckForUpdates = Channel.current.updatesEnabled
     @Published var automaticallyChecksForUpdates =
         UserDefaults.standard.bool(forKey: Updater.autoCheckDefaultsKey)
 
     init() {
-        // Honor the opt-in auto-check on launch (default off for this fork).
-        Task { @MainActor in
-            if let available = await updater.checkOnLaunch() {
-                presentUpdatePrompt(available)
-            }
-        }
+        // Check once on launch, then keep a recurring timer running while enabled.
+        Task { @MainActor in await autoCheck() }
+        startOrStopTimer()
     }
 
     func setAutomaticallyChecksForUpdates(_ value: Bool) {
         automaticallyChecksForUpdates = value
         UserDefaults.standard.set(value, forKey: Updater.autoCheckDefaultsKey)
+        startOrStopTimer()
     }
 
     func checkForUpdates() {
@@ -425,12 +433,38 @@ class UpdaterViewModel: ObservableObject {
         Task { @MainActor in
             defer { canCheckForUpdates = Channel.current.updatesEnabled }
             if let available = await updater.check() {
+                lastPromptedVersion = available.version
                 presentUpdatePrompt(available)
             } else {
                 presentInfo(title: String(localized: "You're up to date"),
                             message: String(format: String(localized: "Quill %@ is the latest version."), Updater.currentVersion))
             }
         }
+    }
+
+    // MARK: - Auto-check (launch + recurring timer)
+
+    /// (Re)build the recurring check timer to match the current toggle + channel.
+    /// Called on launch and whenever the auto-check setting changes.
+    private func startOrStopTimer() {
+        checkTimer?.invalidate()
+        checkTimer = nil
+        guard automaticallyChecksForUpdates, Channel.current.updatesEnabled else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: checkInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.autoCheck() }
+        }
+        timer.tolerance = 10 * 60 // 10-min slack lets macOS coalesce wakeups (battery-friendly)
+        checkTimer = timer
+    }
+
+    /// Silent background check (launch + timer). Only prompts when a *newer* version
+    /// appears, and never twice for the same version in one run.
+    private func autoCheck() async {
+        guard automaticallyChecksForUpdates, Channel.current.updatesEnabled else { return }
+        guard let available = await updater.check(),
+              available.version != lastPromptedVersion else { return }
+        lastPromptedVersion = available.version
+        presentUpdatePrompt(available)
     }
 
     private func presentUpdatePrompt(_ available: Updater.Available) {

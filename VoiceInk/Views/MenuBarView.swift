@@ -14,8 +14,7 @@ struct MenuBarView: View {
     @ObservedObject private var modeManager = ModeManager.shared
     @ObservedObject var audioDeviceManager = AudioDeviceManager.shared
     @AppStorage("hasCompletedOnboardingV2") private var hasCompletedOnboardingV2 = false
-    @State private var launchAtLoginEnabled = LaunchAtLogin.isEnabled
-    
+
     var body: some View {
         VStack {
             if hasCompletedOnboardingV2 {
@@ -34,7 +33,7 @@ struct MenuBarView: View {
 
             Divider()
 
-            Button("Quit VoiceInk") {
+            Button("Quit Quill") {
                 NSApplication.shared.terminate(nil)
             }
         }
@@ -133,10 +132,7 @@ struct MenuBarView: View {
             }
             .keyboardShortcut("d", modifiers: [.command, .shift])
 
-            Toggle("Launch at Login", isOn: $launchAtLoginEnabled)
-                .onChange(of: launchAtLoginEnabled) { oldValue, newValue in
-                    LaunchAtLogin.isEnabled = newValue
-                }
+            LaunchAtLogin.Toggle("Launch at Login")
 
             Divider()
 
@@ -150,7 +146,7 @@ struct MenuBarView: View {
             }
             .disabled(!updaterViewModel.canCheckForUpdates)
 
-            Button("Quit VoiceInk") {
+            Button("Quit Quill") {
                 NSApplication.shared.terminate(nil)
             }
         }

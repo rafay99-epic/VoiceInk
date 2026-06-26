@@ -52,15 +52,6 @@ final class Updater {
 
     // MARK: - Check
 
-    /// Background check on launch — only when the channel updates and the user has
-    /// opted in. Returns the available update (if any) without presenting UI.
-    @discardableResult
-    func checkOnLaunch() async -> Available? {
-        guard Channel.current.updatesEnabled,
-              UserDefaults.standard.bool(forKey: Self.autoCheckDefaultsKey) else { return nil }
-        return await check()
-    }
-
     /// Check the feed. Returns the newer release if one exists, else nil.
     @discardableResult
     func check() async -> Available? {
