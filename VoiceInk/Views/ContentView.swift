@@ -15,7 +15,7 @@ enum ViewType: String, CaseIterable, Identifiable {
 }
 
 struct ContentView: View {
-    private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "ContentView")
+    private let logger = Logger(subsystem: "com.syntaxlabtechnology.quill", category: "ContentView")
     private static let detailBackgroundTintOpacity = 0.50
     @State private var selectedView: ViewType = .dashboard
 

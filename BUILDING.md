@@ -44,7 +44,7 @@ make dev
 ### How the Makefile Helps
 
 The Makefile automatically:
-1. **Manages Dependencies**: Creates a dedicated `~/VoiceInk-Dependencies` directory for all external frameworks
+1. **Manages Dependencies**: Creates a dedicated `~/.quill/Dependencies` directory for all external frameworks
 2. **Builds Whisper Framework**: Clones whisper.cpp and builds the XCFramework with the correct configuration
 3. **Handles Framework Linking**: Sets up the whisper.xcframework in the proper location for Xcode to find
 4. **Verifies Prerequisites**: Checks that git, xcodebuild, and swift are installed before building

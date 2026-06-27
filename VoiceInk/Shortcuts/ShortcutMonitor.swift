@@ -28,7 +28,7 @@ final class ShortcutMonitor {
     // (re)installed on every shortcut change) don't spam it. Reset once the tap
     // installs, so a later permission revocation can warn again.
     private var didWarnAccessibilityMissing = false
-    private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "ShortcutMonitor")
+    private let logger = Logger(subsystem: "com.syntaxlabtechnology.quill", category: "ShortcutMonitor")
 
     private static let shortcutInterruptionWindow: TimeInterval = 1.0
 

@@ -26,7 +26,7 @@ final class CoreAudioRecorder: @unchecked Sendable {
 
     // MARK: - Properties
 
-    private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "CoreAudioRecorder")
+    private let logger = Logger(subsystem: "com.syntaxlabtechnology.quill", category: "CoreAudioRecorder")
 
     private var audioUnit: AudioUnit?
     private var audioFile: ExtAudioFileRef?
@@ -62,7 +62,7 @@ final class CoreAudioRecorder: @unchecked Sendable {
     private var renderBufferSize: UInt32 = 0
 
     // Keep the render callback realtime-safe; processing is best-effort under sustained overload.
-    private let audioProcessingQueue = DispatchQueue(label: "com.prakashjoshipax.voiceink.audioProcessing", qos: .userInitiated)
+    private let audioProcessingQueue = DispatchQueue(label: "com.syntaxlabtechnology.quill.audioProcessing", qos: .userInitiated)
     private let audioProcessingQueueKey = DispatchSpecificKey<Void>()
     private let maxFramesPerRender: UInt32 = 4096
     private let inputRingSlotCount = 96

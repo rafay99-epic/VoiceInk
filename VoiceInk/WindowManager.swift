@@ -9,7 +9,7 @@ enum AppWindowLayout {
 class WindowManager: NSObject {
     static let shared = WindowManager()
 
-    private static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("com.prakashjoshipax.voiceink.mainWindow")
+    private static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("com.syntaxlabtechnology.quill.mainWindow")
     private static let mainWindowAutosaveName = NSWindow.FrameAutosaveName("VoiceInkMainWindowFrame")
 
     private var mainWindow: NSWindow?

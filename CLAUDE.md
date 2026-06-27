@@ -53,11 +53,43 @@ so the Accessibility toggle silently refused to stick. A fresh ID macOS has neve
 seen registers cleanly. **Keep this ID** on upstream merges. (Per-channel ids:
 `…quill` / `…quill.nightly` / `…quill.dev`.)
 
-The ~50 `os.Logger` subsystem strings and `DispatchQueue` labels still read
-`com.prakashjoshipax.voiceink` — these are **deliberately left alone**. They are
-independent literals (log categories, queue names, the Application Support folder)
-that don't affect signing, TCC, or behavior; rewriting them all is a large risky
-diff for zero functional gain.
+The identifier is now **unified across the whole app**: every `com.prakashjoshipax.*`
+literal (the `os.Logger` subsystem strings, `DispatchQueue` labels, the Keychain
+service name, the in-code iCloud CloudKit container, and the old Application Support
+folder name) was rewritten to **`com.syntaxlabtechnology.quill`**. Earlier this fork
+left the ~50 logger/queue literals untouched as a "small diff" tradeoff; that was
+reversed deliberately so the bundle id, entitlements, and code all read the same
+string. On an upstream merge, re-apply this rename to any reintroduced
+`com.prakashjoshipax.*` literals. (Renaming the Keychain service orphans
+previously-saved API keys in signed builds — they get re-entered once; `LOCAL_BUILD`
+keeps keys in `UserDefaults`, so dev builds are unaffected.)
+
+### On-disk storage (`~/.quill`) — third deviation from upstream
+
+All Quill runtime data lives under **`~/.quill`** (the app is not sandboxed, so this
+is the real home dir), not in `~/Library/Application Support`. The single source of
+truth is **`VoiceInk/Services/QuillPaths.swift`** — `QuillPaths.base` (`~/.quill`)
+plus `whisperModels` / `recordings` / `customSounds`, and the SwiftData `*.store`
+files sit directly in `base`. Every path site funnels through it; don't reintroduce
+`FileManager…applicationSupportDirectory…appendingPathComponent("com.…")` paths.
+`QuillPaths.bootstrap()` runs once at the top of `VoiceInkApp.init()` (before the
+SwiftData container opens) and performs a **non-destructive** migration: it
+*copies* existing data from the old `…/Application Support/com.prakashjoshipax.VoiceInk`
+and `…/Application Support/VoiceInk/CustomSounds` folders into `~/.quill` and
+**never deletes the originals**, so an older build or a side-by-side channel that
+still reads the old paths keeps working. The copy is a recursive merge (skips any
+file already present in `~/.quill`, so it's idempotent) guarded by the
+`QuillStorageMigratedToHomeV1` UserDefaults flag. Do not change this to a move —
+deleting the old data risks corrupting an older co-installed version.
+
+**Exception:** the FluidAudio model cache stays at
+`~/Library/Application Support/FluidAudio/Models` — that path is dictated by the
+FluidAudio SDK itself (`FluidAudioModelManager` only mirrors it), so it can't move.
+
+Build-time deps moved too: the whisper.cpp clone/xcframework is now
+`~/.quill/Dependencies` (was `~/VoiceInk-Dependencies`) — see the `Makefile`,
+`ci.yml` cache, and the `whisper.xcframework` `path` in `project.pbxproj`.
+`make clean` removes only `~/.quill/Dependencies`, never user data.
 
 **Do not "clean up" the patch by deleting `PolarService`, `LicenseManager`,
 `LicenseView*`, the onboarding license screens, or the unused `trialPeriodDays`.**
@@ -129,6 +161,14 @@ identity/team (so it doesn't violate the rule above):
   falls back to ad-hoc, so a fresh clone still builds.
 - `Scripts/make-signing-cert.sh` generates the cert, imports it to the login keychain,
   and prints a base64 `.p12` for CI. Run it once locally.
+- **`dev.sh` auto-prefers the stable cert:** if `QUILL_SIGN_IDENTITY` is unset it uses
+  the conventional **`Quill Local Signing`** identity when that cert exists in the
+  keychain (so dev builds keep one signature and the Accessibility grant survives every
+  rebuild); if it's missing, `dev.sh` prints a one-time hint to run `make-signing-cert.sh`
+  and falls back to ad-hoc. This is why the onboarding "Recheck" silently fails on plain
+  ad-hoc dev builds — the rebuilt binary's CDHash no longer matches the old TCC grant, so
+  `AXIsProcessTrusted()` correctly returns `false`. Onboarding now also shows an
+  Accessibility recovery hint (toggle off/on + relaunch) for this case.
 - **CI** (`ci.yml` package+release, `nightly.yml` release) calls
   `.github/scripts/setup-signing.sh`, which imports the cert from the
   **`MACOS_SIGN_CERT_P12`** / **`MACOS_SIGN_CERT_PASSWORD`** secrets into a throwaway
@@ -219,7 +259,7 @@ stable** (see Branch model below).
   `VERSION=0.<commit count>`, imports the stable cert via
   `.github/scripts/setup-signing.sh`, builds via `./build.sh && ./make-dmg.sh`, and
   `gh release create v$VERSION build/Quill.dmg`.
-- whisper.xcframework is cached (`~/VoiceInk-Dependencies`, key `whisper-xcframework-v1`).
+- whisper.xcframework is cached (`~/.quill/Dependencies`, key `whisper-xcframework-v2`).
 - **Homebrew cask** — the `quill` cask lives in the `rafay99-epic/homebrew-apps` tap;
   the release job auto-bumps it via `.github/scripts/bump-cask.sh` (**needs the
   `TAP_TOKEN` secret**, fine-grained PAT, Contents R/W on `homebrew-apps`; skips with

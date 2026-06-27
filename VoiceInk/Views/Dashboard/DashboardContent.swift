@@ -4,7 +4,7 @@ import Foundation
 import os
 
 struct DashboardContent: View {
-    private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "DashboardContent")
+    private let logger = Logger(subsystem: "com.syntaxlabtechnology.quill", category: "DashboardContent")
     private static let fallbackDisplayName = String(localized: "there")
     private static let displayNameFontSize: CGFloat = 28
     private static let displayNameFontWeight: NSFont.Weight = .bold

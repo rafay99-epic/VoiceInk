@@ -5,7 +5,7 @@ import SelectedTextKit
 
 @MainActor
 final class SelectedTextService {
-    private static let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "SelectedTextService")
+    private static let logger = Logger(subsystem: "com.syntaxlabtechnology.quill", category: "SelectedTextService")
     private static let textManager = SelectedTextManager.shared
     private static let selectedTextStrategies: [TextStrategy] = [
         .accessibility,

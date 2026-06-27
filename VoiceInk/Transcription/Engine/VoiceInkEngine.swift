@@ -121,7 +121,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
     let assistantChat: AssistantChatService?
     private let pipeline: TranscriptionPipeline
 
-    let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "VoiceInkEngine")
+    let logger = Logger(subsystem: "com.syntaxlabtechnology.quill", category: "VoiceInkEngine")
 
     init(
         modelContext: ModelContext,
@@ -142,9 +142,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
             self.assistantChat = nil
         }
 
-        let appSupportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("com.prakashjoshipax.VoiceInk")
-        self.recordingsDirectory = appSupportDirectory.appendingPathComponent("Recordings")
+        self.recordingsDirectory = QuillPaths.recordings
 
         self.serviceRegistry = TranscriptionServiceRegistry(
             modelProvider: whisperModelManager,

@@ -60,8 +60,8 @@ jobs:
       - name: Cache whisper.cpp framework
         uses: actions/cache@v4
         with:
-          path: ~/VoiceInk-Dependencies
-          key: whisper-xcframework-v1
+          path: ~/.quill/Dependencies
+          key: whisper-xcframework-v2
       - name: Free disk space
         run: |
           df -h /
@@ -97,8 +97,8 @@ jobs:
       - name: Cache whisper.cpp framework
         uses: actions/cache@v4
         with:
-          path: ~/VoiceInk-Dependencies
-          key: whisper-xcframework-v1
+          path: ~/.quill/Dependencies
+          key: whisper-xcframework-v2
       - name: Free disk space
         run: |
           df -h /

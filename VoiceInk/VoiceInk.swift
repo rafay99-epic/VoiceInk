@@ -46,7 +46,11 @@ struct VoiceInkApp: App {
         AppAppearancePreference.applyStored()
         OnboardingV2Migration.prepareIfNeeded()
 
-        let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "Initialization")
+        // Ensure ~/.quill exists and migrate any data from the old Application
+        // Support layout BEFORE the SwiftData container opens the *.store files.
+        QuillPaths.bootstrap()
+
+        let logger = Logger(subsystem: "com.syntaxlabtechnology.quill", category: "Initialization")
         // Keep existing model order stable; append new models after synced entities.
         let schema = Schema([
             Transcription.self,
@@ -96,9 +100,7 @@ struct VoiceInkApp: App {
         _enhancementService = StateObject(wrappedValue: enhancementService)
 
         // 1. Create modelsDirectory URL
-        let appSupportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("com.prakashjoshipax.VoiceInk")
-        let modelsDirectory = appSupportDirectory.appendingPathComponent("WhisperModels")
+        let modelsDirectory = QuillPaths.whisperModels
 
         // 2. Create model managers
         let whisperModelManager = WhisperModelManager(modelsDirectory: modelsDirectory)
@@ -199,14 +201,13 @@ struct VoiceInkApp: App {
     }
 
     private static func createPersistentContainer(schema: Schema, logger: Logger) throws -> ModelContainer {
-        let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("com.prakashjoshipax.VoiceInk", isDirectory: true)
+        let dataDirectory = QuillPaths.base
 
-        try? FileManager.default.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
 
-        let defaultStoreURL = appSupportURL.appendingPathComponent("default.store")
-        let dictionaryStoreURL = appSupportURL.appendingPathComponent("dictionary.store")
-        let statsStoreURL = appSupportURL.appendingPathComponent("stats.store")
+        let defaultStoreURL = dataDirectory.appendingPathComponent("default.store")
+        let dictionaryStoreURL = dataDirectory.appendingPathComponent("dictionary.store")
+        let statsStoreURL = dataDirectory.appendingPathComponent("stats.store")
 
         let transcriptSchema = Schema([Transcription.self])
         let transcriptConfig = ModelConfiguration(
@@ -220,7 +221,7 @@ struct VoiceInkApp: App {
         #if LOCAL_BUILD
         let dictionaryCloudKit: ModelConfiguration.CloudKitDatabase = .none
         #else
-        let dictionaryCloudKit: ModelConfiguration.CloudKitDatabase = .private("iCloud.com.prakashjoshipax.VoiceInk")
+        let dictionaryCloudKit: ModelConfiguration.CloudKitDatabase = .private("iCloud.com.syntaxlabtechnology.quill")
         #endif
         let dictionaryConfig = ModelConfiguration(
             "dictionary",
