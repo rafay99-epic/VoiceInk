@@ -1,0 +1,21 @@
+dev.sh
+  s_40eddfca1692d0::t_3f4f31c9382c7b 15-18
+VoiceInk/Services/QuillPaths.swift
+  s_40eddfca1692d0::t_d756cd394300a5 83,85,91-100,102,109-115,117,121-126,128-131,133,137-138,141,143-144,146-147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "058a5a869c24d0d3a90e474ec1666e3389dc25f2",
+  "prompts": {},
+  "sessions": {
+    "s_40eddfca1692d0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9394e7b1-f7aa-4bae-b9bc-189cdb04ce38",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
