@@ -64,22 +64,29 @@ string. On an upstream merge, re-apply this rename to any reintroduced
 previously-saved API keys in signed builds — they get re-entered once; `LOCAL_BUILD`
 keeps keys in `UserDefaults`, so dev builds are unaffected.)
 
-### On-disk storage (`~/.quill`) — third deviation from upstream
+### On-disk storage (`~/.quill`, per channel) — third deviation from upstream
 
-All Quill runtime data lives under **`~/.quill`** (the app is not sandboxed, so this
-is the real home dir), not in `~/Library/Application Support`. The single source of
-truth is **`VoiceInk/Services/QuillPaths.swift`** — `QuillPaths.base` (`~/.quill`)
+All Quill runtime data lives under a **per-channel home folder** (the app is not
+sandboxed, so this is the real home dir), not in `~/Library/Application Support`:
+**`~/.quill`** for Stable, **`~/.quill-dev`** for Dev, **`~/.quill-nightly`** for
+Nightly (`Channel.dataFolderName`). This isolation is load-bearing — one machine
+runs the Stable daily driver and a Dev build at once, and debugging Dev must never
+touch Stable's models, history, or stores. The single source of truth is
+**`VoiceInk/Services/QuillPaths.swift`** — `QuillPaths.base` (this channel's folder)
 plus `whisperModels` / `recordings` / `customSounds`, and the SwiftData `*.store`
 files sit directly in `base`. Every path site funnels through it; don't reintroduce
-`FileManager…applicationSupportDirectory…appendingPathComponent("com.…")` paths.
+`FileManager…applicationSupportDirectory…appendingPathComponent("com.…")` paths and
+don't hardcode `~/.quill` — go through `QuillPaths`/`Channel`.
 `QuillPaths.bootstrap()` runs once at the top of `VoiceInkApp.init()` (before the
 SwiftData container opens) and performs a **non-destructive** migration: it
 *copies* existing data from the old `…/Application Support/com.prakashjoshipax.VoiceInk`
-and `…/Application Support/VoiceInk/CustomSounds` folders into `~/.quill` and
-**never deletes the originals**, so an older build or a side-by-side channel that
-still reads the old paths keeps working. The copy is a recursive merge (skips any
-file already present in `~/.quill`, so it's idempotent) guarded by the
-`QuillStorageMigratedToHomeV1` UserDefaults flag. Do not change this to a move —
+and `…/Application Support/VoiceInk/CustomSounds` folders into this channel's folder
+and **never deletes the originals**, so an older build or another channel that still
+reads the old paths keeps working. Each channel migrates independently from the
+shared legacy location into its own folder, so seeding Dev never disturbs Stable.
+The copy is a recursive merge (skips any file already present, so it's idempotent)
+guarded by the per-channel `QuillStorageMigratedToHomeV2` UserDefaults flag (bumped
+from V1 when the layout went per-channel). Do not change the copy to a move —
 deleting the old data risks corrupting an older co-installed version.
 
 **Exception:** the FluidAudio model cache stays at
@@ -88,8 +95,11 @@ FluidAudio SDK itself (`FluidAudioModelManager` only mirrors it), so it can't mo
 
 Build-time deps moved too: the whisper.cpp clone/xcframework is now
 `~/.quill/Dependencies` (was `~/VoiceInk-Dependencies`) — see the `Makefile`,
-`ci.yml` cache, and the `whisper.xcframework` `path` in `project.pbxproj`.
-`make clean` removes only `~/.quill/Dependencies`, never user data.
+`ci.yml` cache, and the `whisper.xcframework` `path` in `project.pbxproj`. This one
+is **channel-neutral on purpose** (always `~/.quill/Dependencies`, never
+`~/.quill-dev/…`): it's build infrastructure referenced by the shared Xcode project,
+not per-channel user data, so every channel builds against the same framework. The
+runtime migration never touches it, and `make clean` removes only it, never user data.
 
 **Do not "clean up" the patch by deleting `PolarService`, `LicenseManager`,
 `LicenseView*`, the onboarding license screens, or the unused `trialPeriodDays`.**

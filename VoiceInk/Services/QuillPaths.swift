@@ -3,28 +3,35 @@ import OSLog
 
 /// Single source of truth for where Quill keeps everything on disk.
 ///
-/// All Quill data lives under `~/.quill`. The app is **not** sandboxed (see
-/// `VoiceInk.entitlements`), so `homeDirectoryForCurrentUser` is the user's real
-/// home directory and `~/.quill` is a plain hidden folder there.
+/// All Quill data lives under a **per-channel** home folder so the Stable and Dev
+/// apps can run side by side on one machine without their models, recordings, or
+/// SwiftData stores colliding — `~/.quill` for Stable, `~/.quill-dev` for Dev,
+/// `~/.quill-nightly` for Nightly (see `Channel.dataFolderName`). The app is **not**
+/// sandboxed (see `VoiceInk.entitlements`), so `homeDirectoryForCurrentUser` is the
+/// user's real home directory and these are plain hidden folders there.
 ///
 /// This replaces the old split layout, where runtime data sat in
 /// `~/Library/Application Support/com.prakashjoshipax.VoiceInk` (plus a separate
 /// `~/Library/Application Support/VoiceInk/CustomSounds`) and the build-time
 /// whisper.cpp framework sat in `~/VoiceInk-Dependencies`.
 ///
-/// `bootstrap()` runs a one-time, **non-destructive** migration of the runtime
-/// data into `~/.quill`: it *copies* the old files over and **never deletes the
-/// originals**. That is deliberate — an older Quill build (or a side-by-side
-/// channel) that still reads the old locations keeps working untouched. The cost
-/// is a one-time duplication of the data on disk.
+/// `bootstrap()` runs a one-time, **non-destructive** migration of the runtime data
+/// into this channel's folder: it *copies* the old files over and **never deletes
+/// the originals**. Each channel migrates independently from the shared legacy
+/// location into its own folder, so seeding Dev never disturbs Stable. That is
+/// deliberate — an older Quill build (or another channel) that still reads the old
+/// locations keeps working untouched. The cost is a one-time duplication on disk.
 ///
 /// Note: the FluidAudio model cache (`~/Library/Application Support/FluidAudio`)
 /// is intentionally left where it is — that path is dictated by the FluidAudio
-/// SDK itself (see `FluidAudioModelManager`), so it cannot be relocated here.
+/// SDK itself (see `FluidAudioModelManager`), so it cannot be relocated here. The
+/// build-time whisper.cpp framework (`~/.quill/Dependencies`) is shared across
+/// channels because it is build infrastructure referenced by the Xcode project, not
+/// per-channel user data.
 enum QuillPaths {
-    /// `~/.quill` — the root for all Quill data.
+    /// This channel's data root — e.g. `~/.quill` (Stable) or `~/.quill-dev` (Dev).
     static let base: URL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".quill", isDirectory: true)
+        .appendingPathComponent(Channel.current.dataFolderName, isDirectory: true)
 
     /// Downloaded Whisper models (`~/.quill/WhisperModels`).
     static var whisperModels: URL { base.appendingPathComponent("WhisperModels", isDirectory: true) }
@@ -55,7 +62,11 @@ enum QuillPaths {
 
     // MARK: - Migration
 
-    private static let migrationDefaultsKey = "QuillStorageMigratedToHomeV1"
+    // V2: the data root became per-channel (~/.quill, ~/.quill-dev, …). The key is
+    // already scoped per channel via this build's UserDefaults domain (bundle id),
+    // but the version bump re-runs the copy for installs that migrated under V1's
+    // single shared ~/.quill so each channel reseeds into its own folder.
+    private static let migrationDefaultsKey = "QuillStorageMigratedToHomeV2"
 
     private static func migrateLegacyStorageIfNeeded() {
         let defaults = UserDefaults.standard

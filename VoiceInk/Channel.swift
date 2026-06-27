@@ -49,6 +49,19 @@ enum Channel: String, Sendable {
         }
     }
 
+    /// Name of this channel's data folder in the home directory. Each channel keeps
+    /// its own folder (`~/.quill`, `~/.quill-nightly`, `~/.quill-dev`) so Stable and
+    /// Dev can run side by side on one machine without their models, recordings, or
+    /// SwiftData stores ever touching each other — debugging Dev can never corrupt
+    /// the Stable daily driver. See `QuillPaths`.
+    var dataFolderName: String {
+        switch self {
+        case .stable:  return ".quill"
+        case .nightly: return ".quill-nightly"
+        case .dev:     return ".quill-dev"
+        }
+    }
+
     /// The published DMG asset name for this channel. nil for Dev, which never
     /// publishes a release. The updater matches releases by this exact name.
     var assetName: String? {
