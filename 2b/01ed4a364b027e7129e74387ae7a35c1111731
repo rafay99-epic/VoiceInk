@@ -1,0 +1,25 @@
+VoiceInk/Services/QuillPaths.swift
+  s_40eddfca1692d0::t_f047b6d3910a1e 65-69
+  s_40eddfca1692d0::t_51937b67b7a950 6-11,18-23,27-30,32,34
+CLAUDE.md
+  s_40eddfca1692d0::t_cfbf1ea32a6c71 98-102
+  s_40eddfca1692d0::t_76f0c6aeb61873 67,69-75,78-79,83-89
+VoiceInk/Channel.swift
+  s_40eddfca1692d0::t_f8473de0b5b62a 52-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "2b01ed4a364b027e7129e74387ae7a35c1111731",
+  "prompts": {},
+  "sessions": {
+    "s_40eddfca1692d0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9394e7b1-f7aa-4bae-b9bc-189cdb04ce38",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
