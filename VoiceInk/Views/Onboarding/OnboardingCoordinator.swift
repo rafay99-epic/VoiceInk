@@ -21,6 +21,12 @@ final class OnboardingCoordinator: ObservableObject {
         }
     }
 
+    @Published var hasRequestedAccessibility: Bool {
+        didSet {
+            defaults.set(hasRequestedAccessibility, forKey: OnboardingStorageKeys.requestedAccessibility)
+        }
+    }
+
     @Published var experienceStepIndex: Int {
         didSet {
             defaults.set(experienceStepIndex, forKey: OnboardingStorageKeys.experienceIndex)
@@ -71,6 +77,7 @@ final class OnboardingCoordinator: ObservableObject {
         self.storedStage = defaults.string(forKey: OnboardingStorageKeys.stage) ?? OnboardingStage.permissions.rawValue
         self.storedActivePermission = defaults.string(forKey: OnboardingStorageKeys.activePermission) ?? OnboardingPermissionKind.microphone.rawValue
         self.hasRequestedScreenRecording = defaults.bool(forKey: OnboardingStorageKeys.requestedScreenRecording)
+        self.hasRequestedAccessibility = defaults.bool(forKey: OnboardingStorageKeys.requestedAccessibility)
         self.experienceStepIndex = defaults.integer(forKey: OnboardingStorageKeys.experienceIndex)
         self.storedOnboardingAIProvider = defaults.string(forKey: OnboardingStorageKeys.aiProvider) ?? AIProvider.groq.rawValue
         self.storedTranscriptionSetupKind = defaults.string(
@@ -420,6 +427,7 @@ enum OnboardingStorageKeys {
     static let stage = "onboardingStage"
     static let activePermission = "onboardingActivePermission"
     static let requestedScreenRecording = "onboardingRequestedScreenRecording"
+    static let requestedAccessibility = "onboardingRequestedAccessibility"
     static let experienceIndex = "onboardingExperienceIndex"
     static let aiProvider = "onboardingAIProvider"
     static let transcriptionSetupKind = "onboardingTranscriptionSetupKind"
@@ -430,6 +438,7 @@ enum OnboardingStorageKeys {
         stage,
         activePermission,
         requestedScreenRecording,
+        requestedAccessibility,
         aiProvider,
         transcriptionSetupKind,
         transcriptionProvider,

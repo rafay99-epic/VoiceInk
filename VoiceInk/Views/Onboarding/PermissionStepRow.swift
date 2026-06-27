@@ -7,6 +7,7 @@ struct PermissionStepRow: View {
     let isActive: Bool
     let isLocked: Bool
     let showsRestartHint: Bool
+    let restartHintMessage: LocalizedStringKey
     let actionTitle: String
     let onSelect: () -> Void
     let onAction: () -> Void
@@ -112,7 +113,7 @@ struct PermissionStepRow: View {
 
     private var restartHint: some View {
         HStack(spacing: 8) {
-            Text("Restart Quill after enabling Screen Recording.")
+            Text(restartHintMessage)
                 .font(.system(size: 12))
                 .foregroundColor(AppTheme.Text.muted)
                 .fixedSize(horizontal: false, vertical: true)

@@ -152,6 +152,7 @@ final class OnboardingPermissionController {
     }
 
     private func requestAccessibility() {
+        coordinator.hasRequestedAccessibility = true
         let options: NSDictionary = [
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
         ]
