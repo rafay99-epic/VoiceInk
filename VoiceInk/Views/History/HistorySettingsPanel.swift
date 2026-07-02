@@ -8,8 +8,8 @@ struct HistorySettingsPanel: View {
 
     @AppStorage(CleanupSettingsKeys.isTranscriptionCleanupEnabled) private var isTranscriptionCleanupEnabled = false
     @AppStorage(CleanupSettingsKeys.transcriptionRetentionMinutes) private var transcriptionRetentionMinutes = 24 * 60
-    @AppStorage(CleanupSettingsKeys.isAudioCleanupEnabled) private var isAudioCleanupEnabled = false
-    @AppStorage(CleanupSettingsKeys.audioRetentionPeriod) private var audioRetentionPeriod = 7
+    @AppStorage(CleanupSettingsKeys.isAudioCleanupEnabled) private var isAudioCleanupEnabled = true
+    @AppStorage(CleanupSettingsKeys.audioRetentionPeriod) private var audioRetentionPeriod = 10
 
     @State private var isPerformingAudioCleanup = false
     @State private var isShowingAudioConfirmation = false
@@ -56,10 +56,12 @@ struct HistorySettingsPanel: View {
                         Toggle("Auto-delete Audio Files", isOn: $isAudioCleanupEnabled)
 
                         if isAudioCleanupEnabled {
-                            Picker("Keep Audio For", selection: $audioRetentionPeriod) {
+                            Picker("Delete After", selection: $audioRetentionPeriod) {
+                                Text("Immediately").tag(0)
                                 Text("1 day").tag(1)
                                 Text("3 days").tag(3)
                                 Text("7 days").tag(7)
+                                Text("10 days").tag(10)
                                 Text("14 days").tag(14)
                                 Text("30 days").tag(30)
                             }

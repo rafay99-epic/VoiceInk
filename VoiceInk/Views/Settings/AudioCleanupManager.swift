@@ -6,12 +6,19 @@ class AudioCleanupManager {
     static let shared = AudioCleanupManager()
 
     private var cleanupTimer: Timer?
+    private var completionObserver: NSObjectProtocol?
+    private var modelContext: ModelContext?
     private let cleanupCheckInterval: TimeInterval = 86400 // Check once per day (in seconds)
-    
+    // Orphan files younger than this are never swept, so an "Immediately" retention
+    // can't delete a recording whose transcription is still in flight.
+    private let orphanGracePeriod: TimeInterval = 3600
+
     private init() {}
-    
+
     /// Start the automatic cleanup schedule.
     func startAutomaticCleanup(modelContext: ModelContext) {
+        self.modelContext = modelContext
+
         // Cancel any existing timer
         cleanupTimer?.invalidate()
 
@@ -20,6 +27,20 @@ class AudioCleanupManager {
             Task { [weak self] in
                 await self?.runAutomaticCleanupIfNeeded(modelContext: modelContext)
             }
+        }
+
+        // With an "Immediately" retention period, delete each recording as soon as
+        // its transcription is saved rather than waiting for the daily sweep.
+        if let completionObserver {
+            NotificationCenter.default.removeObserver(completionObserver)
+        }
+        completionObserver = NotificationCenter.default.addObserver(
+            forName: .transcriptionCompleted,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self, let transcription = notification.object as? Transcription else { return }
+            Task { await self.deleteAudioImmediatelyIfConfigured(for: transcription) }
         }
     }
 
@@ -39,6 +60,32 @@ class AudioCleanupManager {
     func stopAutomaticCleanup() {
         cleanupTimer?.invalidate()
         cleanupTimer = nil
+
+        if let completionObserver {
+            NotificationCenter.default.removeObserver(completionObserver)
+            self.completionObserver = nil
+        }
+    }
+
+    /// Delete a transcription's audio right after it completes when retention is "Immediately" (0 days)
+    private func deleteAudioImmediatelyIfConfigured(for transcription: Transcription) async {
+        guard UserDefaults.standard.bool(forKey: CleanupSettingsKeys.isAudioCleanupEnabled),
+              !UserDefaults.standard.bool(forKey: CleanupSettingsKeys.isTranscriptionCleanupEnabled),
+              UserDefaults.standard.integer(forKey: CleanupSettingsKeys.audioRetentionPeriod) == 0,
+              let modelContext else { return }
+
+        await MainActor.run {
+            guard let urlString = transcription.audioFileURL,
+                  let url = URL(string: urlString),
+                  FileManager.default.fileExists(atPath: url.path) else { return }
+            do {
+                try FileManager.default.removeItem(at: url)
+                transcription.audioFileURL = nil
+                try? modelContext.save()
+            } catch {
+                // Skip - the daily sweep will retry
+            }
+        }
     }
     
     /// Get information about the files that would be cleaned up
@@ -84,7 +131,7 @@ class AudioCleanupManager {
                 }
 
                 let referencedFileNames = try self.fetchReferencedFileNames(modelContext)
-                let orphanFiles = self.findOrphanFiles(olderThan: cutoffDate, referencedFileNames: referencedFileNames)
+                let orphanFiles = self.findOrphanFiles(olderThan: self.orphanCutoff(from: cutoffDate), referencedFileNames: referencedFileNames)
                 for orphanURL in orphanFiles {
                     if let attributes = try? FileManager.default.attributesOfItem(atPath: orphanURL.path),
                        let fileSize = attributes[.size] as? Int64 {
@@ -150,7 +197,7 @@ class AudioCleanupManager {
                 // Sweep recordings no transcription references (failed or cancelled sessions),
                 // respecting the same retention window so in-flight recordings are never touched.
                 let referencedFileNames = try self.fetchReferencedFileNames(modelContext)
-                for orphanURL in self.findOrphanFiles(olderThan: cutoffDate, referencedFileNames: referencedFileNames) {
+                for orphanURL in self.findOrphanFiles(olderThan: self.orphanCutoff(from: cutoffDate), referencedFileNames: referencedFileNames) {
                     try? FileManager.default.removeItem(at: orphanURL)
                 }
             }
@@ -225,6 +272,11 @@ class AudioCleanupManager {
                   let url = URL(string: urlString) else { return nil }
             return url.lastPathComponent
         })
+    }
+
+    /// Retention cutoff for orphan files, never closer to now than the grace period
+    private func orphanCutoff(from cutoffDate: Date) -> Date {
+        min(cutoffDate, Date().addingTimeInterval(-orphanGracePeriod))
     }
 
     /// Recordings on disk that no transcription references and that predate the cutoff

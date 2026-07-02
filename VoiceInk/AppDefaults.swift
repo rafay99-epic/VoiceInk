@@ -20,6 +20,7 @@ enum AppDefaults {
             "restoreClipboardAfterPaste": true,
             "clipboardRestoreDelay": 2.0,
             "useAppleScriptPaste": false,
+            "keepTranscriptOnClipboard": true,
 
             // Audio & Media
             "isSystemMuteEnabled": true,
@@ -38,8 +39,8 @@ enum AppDefaults {
             // Cleanup
             CleanupSettingsKeys.isTranscriptionCleanupEnabled: false,
             CleanupSettingsKeys.transcriptionRetentionMinutes: 1440,
-            CleanupSettingsKeys.isAudioCleanupEnabled: false,
-            CleanupSettingsKeys.audioRetentionPeriod: 7,
+            CleanupSettingsKeys.isAudioCleanupEnabled: true,
+            CleanupSettingsKeys.audioRetentionPeriod: 10,
 
             // UI & Behavior
             "IsMenuBarOnly": false,

@@ -18,6 +18,7 @@ struct SettingsView: View {
     @AppStorage("ShowMenuBarIcon") private var showMenuBarIcon = true
     @AppStorage("restoreClipboardAfterPaste") private var restoreClipboardAfterPaste = true
     @AppStorage("clipboardRestoreDelay") private var clipboardRestoreDelay = 2.0
+    @AppStorage("keepTranscriptOnClipboard") private var keepTranscriptOnClipboard = true
     @AppStorage(PasteMethod.userDefaultsKey) private var pasteMethodRawValue = PasteMethod.standard.rawValue
     @AppStorage(AppAppearancePreference.userDefaultsKey) private var appAppearancePreference = AppAppearancePreference.system
     @AppStorage(AppLanguagePreference.userDefaultsKey) private var appLanguagePreference = AppLanguagePreference.systemValue
@@ -145,11 +146,18 @@ struct SettingsView: View {
             }
 
             Section("Pasting") {
+                Toggle(isOn: $keepTranscriptOnClipboard) {
+                    HStack(spacing: 4) {
+                        Text("Copy Transcript to Clipboard")
+                        InfoTip("Keeps every transcription on the clipboard after pasting, so you can paste it manually with Cmd+V if automatic pasting fails. While enabled, your previous clipboard content is not restored.")
+                    }
+                }
+
                 ExpandableSettingsRow(
                     isExpanded: $isRestoreClipboardExpanded,
                     isEnabled: $restoreClipboardAfterPaste,
                     label: "Keep Clipboard Content",
-                    infoMessage: "Quill temporarily uses the clipboard to paste transcription. When enabled, it restores your previous clipboard content after the selected delay. When disabled, the pasted transcription stays on your clipboard."
+                    infoMessage: "Quill temporarily uses the clipboard to paste transcription. When enabled, it restores your previous clipboard content after the selected delay. When disabled, the pasted transcription stays on your clipboard. Has no effect while Copy Transcript to Clipboard is on."
                 ) {
                     Picker("Restore Delay", selection: $clipboardRestoreDelay) {
                         Text("250ms").tag(0.25)

@@ -46,7 +46,10 @@ class CursorPaster {
     @MainActor
     private static func performPasteSession(_ text: String) async -> PasteResult {
         let pasteboard = NSPasteboard.general
-        let shouldRestoreClipboard = UserDefaults.standard.bool(forKey: "restoreClipboardAfterPaste")
+        // Keeping the transcript on the clipboard (so a failed paste can be recovered with Cmd+V)
+        // overrides restoring the previous clipboard content — the two are mutually exclusive.
+        let keepTranscriptOnClipboard = UserDefaults.standard.bool(forKey: "keepTranscriptOnClipboard")
+        let shouldRestoreClipboard = UserDefaults.standard.bool(forKey: "restoreClipboardAfterPaste") && !keepTranscriptOnClipboard
         let savedContents = shouldRestoreClipboard ? snapshotClipboard(from: pasteboard) : []
         let sessionID = UUID().uuidString
 
