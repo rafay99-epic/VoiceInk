@@ -28,9 +28,6 @@ struct VoiceInkApp: App {
     @AppStorage("ShowMenuBarIcon") private var showMenuBarIcon = true
     @State private var didShowAccessibilityReminder = false
 
-    // Audio cleanup manager for automatic deletion of old audio files
-    private let audioCleanupManager = AudioCleanupManager.shared
-
     // Transcription auto-cleanup service for zero data retention
     private let transcriptionAutoCleanupService = TranscriptionAutoCleanupService.shared
 
@@ -171,6 +168,12 @@ struct VoiceInkApp: App {
         Task {
             await migrationTask?.value
             TranscriptionAutoCleanupService.shared.startMonitoring(modelContext: mainContext)
+
+            // Audio-only cleanup must run app-wide, not per-window: this is a menu-bar app,
+            // so the main window may never appear in a session. The manager itself checks
+            // the enabled flags on every pass, so scheduling unconditionally is safe.
+            await AudioCleanupManager.shared.runAutomaticCleanupIfNeeded(modelContext: mainContext)
+            AudioCleanupManager.shared.startAutomaticCleanup(modelContext: mainContext)
         }
     }
 
@@ -287,15 +290,6 @@ struct VoiceInkApp: App {
 
                             showAccessibilityReminderIfNeeded()
 
-                            // Run due audio-only cleanup and schedule future checks when transcript cleanup is not managing retention.
-                            if !UserDefaults.standard.bool(forKey: CleanupSettingsKeys.isTranscriptionCleanupEnabled) &&
-                                UserDefaults.standard.bool(forKey: CleanupSettingsKeys.isAudioCleanupEnabled) {
-                                Task {
-                                    await audioCleanupManager.runAutomaticCleanupIfNeeded(modelContext: container.mainContext)
-                                }
-                                audioCleanupManager.startAutomaticCleanup(modelContext: container.mainContext)
-                            }
-
                             // Process any pending open-file request now that the main ContentView is ready.
                             if let pendingURL = appDelegate.pendingOpenFileURL {
                                 NotificationCenter.default.post(name: .navigateToDestination, object: nil, userInfo: ["destination": "Transcribe Audio"])
@@ -311,9 +305,6 @@ struct VoiceInkApp: App {
                         .onDisappear {
                             AnnouncementsService.shared.stop()
                             whisperModelManager.unloadModel()
-
-                            // Stop the automatic audio cleanup process
-                            audioCleanupManager.stopAutomaticCleanup()
                         }
                 } else {
                     OnboardingView(hasCompletedOnboardingV2: $hasCompletedOnboardingV2)

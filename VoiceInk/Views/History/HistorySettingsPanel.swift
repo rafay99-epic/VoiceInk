@@ -13,7 +13,7 @@ struct HistorySettingsPanel: View {
 
     @State private var isPerformingAudioCleanup = false
     @State private var isShowingAudioConfirmation = false
-    @State private var cleanupInfo: (fileCount: Int, totalSize: Int64, transcriptions: [Transcription]) = (0, 0, [])
+    @State private var cleanupInfo: (fileCount: Int, totalSize: Int64, transcriptions: [Transcription], orphanFiles: [URL]) = (0, 0, [], [])
     @State private var showAudioCleanupResult = false
     @State private var audioCleanupResult: (deletedCount: Int, errorCount: Int) = (0, 0)
     @State private var showTranscriptCleanupResult = false
@@ -162,7 +162,8 @@ struct HistorySettingsPanel: View {
             await MainActor.run { isPerformingAudioCleanup = true }
             let result = await AudioCleanupManager.shared.runCleanupForTranscriptions(
                 modelContext: modelContext,
-                transcriptions: cleanupInfo.transcriptions
+                transcriptions: cleanupInfo.transcriptions,
+                orphanFiles: cleanupInfo.orphanFiles
             )
             await MainActor.run {
                 audioCleanupResult = result
